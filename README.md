@@ -54,7 +54,14 @@ A comprehensive full-stack web application designed to streamline the process of
     cd Hostel-Mess-Planner
     ```
 
-2.  **Environment Setup**
+3.  **Database Setup**
+    *   Navigate to your Supabase project's **SQL Editor**.
+    *   Open and run the scripts from the `SQL/` folder in the following order:
+        1.  `schema.sql` (Creates tables and security policies)
+        2.  `setup_data.sql` (Inserts initial data like mess types)
+        3.  `import_sample_menu.sql` (Optional: Adds sample menu items)
+
+4.  **Environment Setup**
     Create a `.env` file in the `server` directory and a `.env.local` file in the `client` directory with your Supabase credentials.
 
     **Server (.env)**
