@@ -85,7 +85,8 @@ const AdminDashboard = () => {
 
             {showCreate && (
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6 animate-fade-in">
-                    <h3 className="font-semibold mb-4">Create New Voting Session</h3>
+                    <h3 className="font-semibold text-gray-800">Create New Voting Session</h3>
+                    <p className="text-sm text-gray-500 mb-4">Sessions start in <strong>Draft</strong> mode so caterers can plan the menu before students vote.</p>
                     <form onSubmit={createSession} className="flex flex-col md:flex-row gap-4 items-end">
                         <div className="flex-1 w-full">
                             <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>

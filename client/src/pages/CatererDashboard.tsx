@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Trash2 } from 'lucide-react';
 
 interface Session {
     id: string;
@@ -99,7 +99,9 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
         const { data } = await supabase
             .from('menu_items')
             .select('*')
-            .eq('session_id', session.id);
+            .eq('session_id', session.id)
+            .order('date_served', { ascending: true })
+            .order('meal_type', { ascending: true });
         setItems(data || []);
     };
 
@@ -120,7 +122,7 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
 
             if (error) throw error;
 
-            // Reset form and refresh list
+            // Reset form (keep date/meal/mess for faster entry)
             setName('');
             setDescription('');
             fetchItems();
@@ -132,122 +134,195 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
         }
     };
 
+    // Group items logic
+    const groupedItems = items.reduce((acc, item) => {
+        const d = item.date_served;
+        if (!acc[d]) acc[d] = {};
+        if (!acc[d][item.meal_type]) acc[d][item.meal_type] = [];
+        acc[d][item.meal_type].push(item);
+        return acc;
+    }, {} as Record<string, Record<string, any[]>>);
+
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
-            <div className="bg-white w-full max-w-2xl h-full p-6 shadow-xl overflow-y-auto">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold">Manage Menu: {session.title}</h3>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
+            <div className="bg-white w-full max-w-4xl h-full shadow-xl flex flex-col animate-slide-in-right">
+                {/* Header */}
+                <div className="p-6 border-b flex justify-between items-center bg-gray-50">
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-800">Manage Menu Items</h3>
+                        <p className="text-sm text-gray-500">{session.title}</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
                         <X size={24} />
                     </button>
                 </div>
 
-                <div className="mb-8 bg-gray-50 p-6 rounded-xl border border-gray-200">
-                    <h4 className="font-semibold text-gray-900 mb-4">Add New Item</h4>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
+                <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+                    {/* Add Item Form - Left Side */}
+                    <div className="w-full md:w-1/3 p-6 border-r overflow-y-auto bg-gray-50/50">
+                        <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <Plus size={18} className="text-primary" />
+                            Add New Item
+                        </h4>
+                        <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                                <input
-                                    type="date"
-                                    required
-                                    min={session.start_date}
-                                    max={session.end_date}
-                                    className="w-full px-3 py-2 border rounded-lg"
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
+                                <select
+                                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
                                     value={date}
                                     onChange={(e) => setDate(e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Meal</label>
-                                <select
-                                    className="w-full px-3 py-2 border rounded-lg"
-                                    value={mealType}
-                                    onChange={(e) => setMealType(e.target.value)}
                                 >
-                                    <option value="breakfast">Breakfast</option>
-                                    <option value="lunch">Lunch</option>
-                                    <option value="snacks">Snacks</option>
-                                    <option value="dinner">Dinner</option>
+                                    {(() => {
+                                        // Generate 7 days starting from start_date
+                                        const dates = Array.from({ length: 7 }, (_, i) => {
+                                            const d = new Date(session.start_date);
+                                            d.setDate(d.getDate() + i);
+                                            return d;
+                                        });
+
+                                        return dates.map(d => {
+                                            const val = d.toISOString().split('T')[0];
+                                            return (
+                                                <option key={val} value={val}>
+                                                    {d.toLocaleDateString('en-US', { weekday: 'long' })}
+                                                </option>
+                                            )
+                                        });
+                                    })()}
                                 </select>
                             </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Meal</label>
+                                    <select
+                                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                        value={mealType}
+                                        onChange={(e) => setMealType(e.target.value)}
+                                    >
+                                        <option value="breakfast">Breakfast</option>
+                                        <option value="lunch">Lunch</option>
+                                        <option value="snacks">Snacks</option>
+                                        <option value="dinner">Dinner</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Type</label>
+                                    <select
+                                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                        value={messType}
+                                        onChange={(e) => setMessType(e.target.value)}
+                                    >
+                                        <option value="veg">Veg</option>
+                                        <option value="non_veg">Non-Veg</option>
+                                        <option value="special">Special</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Item Name</label>
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="e.g. Masala Dosa"
+                                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
+                                <textarea
+                                    placeholder="Ingredients, sides..."
+                                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                    rows={3}
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full bg-primary text-white py-2.5 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-semibold shadow-lg shadow-indigo-100"
+                            >
+                                {loading ? 'Adding...' : 'Add Item'}
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* Items List - Right Side */}
+                    <div className="flex-1 p-6 overflow-y-auto bg-white">
+                        <div className="flex flex-col gap-2 mb-6">
+                            <div className="flex justify-between items-center">
+                                <h4 className="font-bold text-gray-800">Current Menu Items</h4>
+                                <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">{items.length} items total</span>
+                            </div>
+                            <div className="flex gap-4 text-xs font-medium">
+                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div> Veg</span>
+                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-500"></div> Non-Veg</span>
+                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-purple-500"></div> Special</span>
+                            </div>
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Mess Type</label>
-                            <div className="flex gap-4">
-                                {['veg', 'non_veg', 'special'].map((t) => (
-                                    <label key={t} className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="messType"
-                                            value={t}
-                                            checked={messType === t}
-                                            onChange={(e) => setMessType(e.target.value)}
-                                            className="text-primary focus:ring-primary"
-                                        />
-                                        <span className="capitalize">{t.replace('_', ' ')}</span>
-                                    </label>
+                        {items.length === 0 ? (
+                            <div className="text-center py-20 text-gray-400">
+                                <Plus size={48} className="mx-auto mb-4 opacity-20" />
+                                <p>No items added yet. Start adding from the left panel.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-8">
+                                {Object.entries(groupedItems).sort().map(([dateStr, meals]: [string, any]) => (
+                                    <div key={dateStr} className="border rounded-xl overflow-hidden">
+                                        <div className="bg-gray-50 px-4 py-3 border-b font-bold text-gray-700 flex justify-between">
+                                            {new Date(dateStr).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                                        </div>
+                                        <div className="divide-y">
+                                            {['breakfast', 'lunch', 'snacks', 'dinner'].map(meal => {
+                                                const mealItems = meals[meal] || [];
+                                                if (mealItems.length === 0) return null; // Hide empty meals or show placeholder? Let's hide for now or show "No items"
+
+                                                return (
+                                                    <div key={meal} className="p-4 flex gap-4">
+                                                        <div className="w-24 flex-shrink-0">
+                                                            <span className="text-xs font-bold uppercase text-gray-400 tracking-wider block pt-1">{meal}</span>
+                                                        </div>
+                                                        <div className="flex-1 space-y-3">
+                                                            {mealItems.map((item: any) => (
+                                                                <div key={item.id} className="flex justify-between items-start group">
+                                                                    <div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className={`w-2 h-2 rounded-full ${item.mess_type === 'veg' ? 'bg-green-500' :
+                                                                                item.mess_type === 'non_veg' ? 'bg-red-500' : 'bg-purple-500'
+                                                                                }`} title={item.mess_type}></span>
+                                                                            <h5 className="font-medium text-gray-900">{item.name}</h5>
+                                                                        </div>
+                                                                        <p className="text-sm text-gray-500 pl-4">{item.description}</p>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            if (!confirm('Delete this item?')) return;
+                                                                            await supabase.from('menu_items').delete().eq('id', item.id);
+                                                                            fetchItems();
+                                                                        }}
+                                                                        className="text-gray-300 hover:text-red-500 transition-colors p-1"
+                                                                        title="Delete Item"
+                                                                    >
+                                                                        <Trash2 size={16} />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
-                            <input
-                                type="text"
-                                required
-                                placeholder="e.g. Masala Dosa"
-                                className="w-full px-3 py-2 border rounded-lg"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                            <textarea
-                                placeholder="Ingredients, details..."
-                                className="w-full px-3 py-2 border rounded-lg"
-                                rows={2}
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                            />
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors"
-                        >
-                            {loading ? 'Adding...' : 'Add Item'}
-                        </button>
-                    </form>
-                </div>
-
-                <div>
-                    <h4 className="font-semibold text-gray-900 mb-4">Proposed Items ({items.length})</h4>
-                    <div className="space-y-3">
-                        {items.map((item) => (
-                            <div key={item.id} className="flex justify-between items-center p-4 bg-white border rounded-lg hover:shadow-sm">
-                                <div>
-                                    <h5 className="font-medium text-gray-900">{item.name}</h5>
-                                    <p className="text-sm text-gray-500">
-                                        {new Date(item.date_served).toLocaleDateString()} • <span className="capitalize">{item.meal_type}</span> • <span className="capitalize">{item.mess_type.replace('_', ' ')}</span>
-                                    </p>
-                                </div>
-                                <button
-                                    className="text-red-500 hover:text-red-700 text-sm"
-                                    onClick={async () => {
-                                        if (!confirm('Delete this item?')) return;
-                                        await supabase.from('menu_items').delete().eq('id', item.id);
-                                        fetchItems();
-                                    }}
-                                >
-                                    Remove
-                                </button>
-                            </div>
-                        ))}
+                        )}
                     </div>
                 </div>
             </div>
