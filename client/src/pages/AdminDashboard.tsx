@@ -67,7 +67,8 @@ const AdminDashboard = () => {
     };
 
     const generatePDF = async (sessionId: string, messType: string) => {
-        window.open(`http://localhost:5000/api/generate-pdf/${sessionId}/${messType}`, '_blank');
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        window.open(`${apiUrl}/api/generate-pdf/${sessionId}/${messType}`, '_blank');
     };
 
     return (
@@ -319,7 +320,7 @@ const FinalizeMenuModal = ({ session, onClose }: { session: Session, onClose: ()
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                    {loading ? <div>Loading...</div> : Object.entries(grouped).sort().map(([key, groupItems]: [string, any[]]) => {
+                    {loading ? <div>Loading...</div> : Object.entries(grouped).sort().map(([key, groupItems]) => {
                         const [date, messType] = key.split(' | ');
                         return (
                             <div key={key}>
@@ -328,7 +329,7 @@ const FinalizeMenuModal = ({ session, onClose }: { session: Session, onClose: ()
                                     <span className="ml-2 px-2 py-0.5 rounded text-xs bg-gray-100 uppercase">{messType.replace(/"/g, '')}</span>
                                 </h4>
                                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {groupItems.map((item: any) => (
+                                    {(groupItems as any[]).map((item: any) => (
                                         <div
                                             key={item.id}
                                             onClick={() => toggleSelection(item.id)}
