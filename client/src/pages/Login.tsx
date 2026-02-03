@@ -12,9 +12,14 @@ const Login = () => {
     // Registration-only fields
     const [fullName, setFullName] = useState('');
     const [regNumber, setRegNumber] = useState('');
-    const [messType, setMessType] = useState<'veg' | 'non_veg' | 'special'>('veg');
+    const [messType, setMessType] = useState<'veg' | 'non_veg' | 'special' | 'food_park'>('veg');
     const [role, setRole] = useState<'student' | 'caterer' | 'admin'>('student');
     const [settings, setSettings] = useState<{ caterer: boolean, admin: boolean }>({ caterer: true, admin: true });
+
+    // New Fields
+    const [servedMessTypes, setServedMessTypes] = useState<string[]>([]);
+    const [availableCaterers, setAvailableCaterers] = useState<any[]>([]);
+    const [assignedCatererId, setAssignedCatererId] = useState('');
 
     useEffect(() => {
         const checkSettings = async () => {
@@ -28,21 +33,47 @@ const Login = () => {
         checkSettings();
     }, []);
 
+    // Fetch Caterers when Mess Type changes (for Students)
+    useEffect(() => {
+        const fetchCaterers = async () => {
+            if (role !== 'student' || !isRegister) return;
+
+            // Logic: Find caterers who have 'messType' in their served_mess_types array
+            // PostgreSQL operator for array contains is @> but Supabase uses .cs (contains)
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('id, full_name, served_mess_types')
+                .eq('role', 'caterer')
+                .contains('served_mess_types', [messType]);
+
+            setAvailableCaterers(data || []);
+            setAssignedCatererId(''); // Reset selection
+        };
+
+        fetchCaterers();
+    }, [messType, role, isRegister]);
+
+    const handleServedTypeChange = (type: string) => {
+        setServedMessTypes(prev =>
+            prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+        );
+    };
+
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         try {
             if (isRegister) {
                 // Validation
-                if (!fullName.trim()) {
-                    alert('Please enter your full name');
-                    setLoading(false);
-                    return;
+                if (!fullName.trim()) throw new Error('Please enter your full name');
+
+                if (role === 'student') {
+                    if (!regNumber.trim()) throw new Error('Please enter your registration number');
+                    if (!assignedCatererId) throw new Error('Please select a caterer');
                 }
-                if (role === 'student' && !regNumber.trim()) {
-                    alert('Please enter your registration number');
-                    setLoading(false);
-                    return;
+
+                if (role === 'caterer') {
+                    if (servedMessTypes.length === 0) throw new Error('Please select at least one served mess type');
                 }
 
                 // Step 1: Create auth account
@@ -50,8 +81,6 @@ const Login = () => {
                     email,
                     password,
                 });
-
-                console.log('Signup response:', { data, error });
 
                 if (error) throw error;
 
@@ -75,7 +104,7 @@ const Login = () => {
                     return;
                 }
 
-                // Step 3: Create or Update profile (handles case if trigger already created it)
+                // Step 3: Create or Update profile
                 if (signInData?.user) {
                     const { error: profileError } = await supabase
                         .from('profiles')
@@ -83,8 +112,10 @@ const Login = () => {
                             id: signInData.user.id,
                             full_name: fullName,
                             role: role,
-                            mess_type: messType,
-                            reg_number: role === 'student' ? regNumber : null
+                            mess_type: role === 'student' ? messType : null,
+                            reg_number: role === 'student' ? regNumber : null,
+                            served_mess_types: role === 'caterer' ? servedMessTypes : null,
+                            assigned_caterer_id: role === 'student' ? assignedCatererId : null
                         });
 
                     if (profileError) {
@@ -104,24 +135,13 @@ const Login = () => {
                     email,
                     password,
                 });
-                console.log('Sign in response:', { data, error });
                 if (error) throw error;
                 navigate('/');
             }
         } catch (error: any) {
             console.error('Auth error:', error);
             const errorMessage = error.message || 'An error occurred. Please try again.';
-
-            // Provide more helpful error messages
-            if (errorMessage.includes('Invalid login credentials')) {
-                alert('Invalid email or password. Please try again.');
-            } else if (errorMessage.includes('Email not confirmed')) {
-                alert('Please confirm your email address before signing in.');
-            } else if (errorMessage.includes('fetch')) {
-                alert('Network error. Please check your internet connection and try again.');
-            } else {
-                alert(errorMessage);
-            }
+            alert(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -129,7 +149,7 @@ const Login = () => {
 
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8">
             <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg">
                 <div className="flex justify-center mb-6">
                     <img src="/logo.png" alt="Hostel Mess Logo" className="h-24 w-auto object-contain" />
@@ -171,6 +191,26 @@ const Login = () => {
                                 </p>
                             )}
 
+                            {role === 'caterer' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Serving Mess Types *</label>
+                                    <div className="space-y-2">
+                                        {['veg', 'non_veg', 'special', 'food_park'].map((type) => (
+                                            <label key={type} className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={servedMessTypes.includes(type)}
+                                                    onChange={() => handleServedTypeChange(type)}
+                                                    className="w-4 h-4 text-primary rounded focus:ring-primary"
+                                                />
+                                                <span className="capitalize">{type.replace('_', ' ')}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1">Select all the mess types you serve.</p>
+                                </div>
+                            )}
+
                             {role === 'student' && (
                                 <>
                                     <div>
@@ -187,41 +227,47 @@ const Login = () => {
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Mess Type *</label>
-                                        <div className="flex gap-4">
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="radio"
-                                                    name="messType"
-                                                    value="veg"
-                                                    checked={messType === 'veg'}
-                                                    onChange={(e) => setMessType(e.target.value as 'veg')}
-                                                    className="text-primary focus:ring-primary"
-                                                />
-                                                <span>Veg</span>
-                                            </label>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="radio"
-                                                    name="messType"
-                                                    value="non_veg"
-                                                    checked={messType === 'non_veg'}
-                                                    onChange={(e) => setMessType(e.target.value as 'non_veg')}
-                                                    className="text-primary focus:ring-primary"
-                                                />
-                                                <span>Non-Veg</span>
-                                            </label>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="radio"
-                                                    name="messType"
-                                                    value="special"
-                                                    checked={messType === 'special'}
-                                                    onChange={(e) => setMessType(e.target.value as 'special')}
-                                                    className="text-primary focus:ring-primary"
-                                                />
-                                                <span>Special</span>
-                                            </label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {['veg', 'non_veg', 'special', 'food_park'].map((type) => (
+                                                <label key={type} className={`
+                                                    flex items-center justify-center p-2 rounded-lg border cursor-pointer hover:bg-gray-50 transition-all
+                                                    ${messType === type ? 'border-primary bg-indigo-50 text-indigo-700 ring-1 ring-primary' : 'border-gray-200'}
+                                                `}>
+                                                    <input
+                                                        type="radio"
+                                                        name="messType"
+                                                        value={type}
+                                                        checked={messType === type}
+                                                        onChange={(e) => setMessType(e.target.value as any)}
+                                                        className="sr-only"
+                                                    />
+                                                    <span className="capitalize text-sm font-medium">{type.replace('_', ' ')}</span>
+                                                </label>
+                                            ))}
                                         </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Select Caterer *</label>
+                                        <select
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                                            value={assignedCatererId}
+                                            onChange={(e) => setAssignedCatererId(e.target.value)}
+                                            required
+                                            disabled={availableCaterers.length === 0}
+                                        >
+                                            <option value="">-- Choose a Caterer --</option>
+                                            {availableCaterers.map((c) => (
+                                                <option key={c.id} value={c.id}>
+                                                    {c.full_name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {availableCaterers.length === 0 && (
+                                            <p className="text-xs text-red-500 mt-1">
+                                                No caterers found serving {messType.replace('_', ' ')}. Please ask an admin to register caterers.
+                                            </p>
+                                        )}
                                     </div>
                                 </>
                             )}

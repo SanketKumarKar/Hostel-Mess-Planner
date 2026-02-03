@@ -27,6 +27,17 @@ const StudentDashboard = () => {
     const [selectedSession, setSelectedSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
     const [showProfileEdit, setShowProfileEdit] = useState(false);
+    const [assignedCaterer, setAssignedCaterer] = useState<any>(null);
+
+    useEffect(() => {
+        const fetchCaterer = async () => {
+            if (profile?.assigned_caterer_id) {
+                const { data } = await supabase.from('profiles').select('*').eq('id', profile.assigned_caterer_id).single();
+                setAssignedCaterer(data);
+            }
+        };
+        fetchCaterer();
+    }, [profile]);
 
     useEffect(() => {
         fetchAllSessions();
@@ -180,6 +191,11 @@ const StudentDashboard = () => {
                             <div className="bg-white/20 px-3 py-1 rounded-full text-sm font-medium backdrop-blur-sm">
                                 Your Mess: <span className="capitalize">{profile.mess_type.replace('_', ' ')}</span>
                             </div>
+                            {assignedCaterer && (
+                                <div className="bg-white/20 px-3 py-1 rounded-full text-sm font-medium backdrop-blur-sm">
+                                    Caterer: {assignedCaterer.full_name}
+                                </div>
+                            )}
                             <button
                                 onClick={() => setShowProfileEdit(true)}
                                 className="text-xs bg-white text-primary px-3 py-1.5 rounded-full font-bold hover:bg-gray-100 transition-colors"
@@ -261,7 +277,7 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
             <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm animate-fade-in">
                 <h3 className="text-lg font-bold mb-4">Update Mess Preference</h3>
                 <div className="space-y-3 mb-6">
-                    {['veg', 'non_veg', 'special'].map((t) => (
+                    {['veg', 'non_veg', 'special', 'food_park'].map((t) => (
                         <label key={t} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                             <input
                                 type="radio"

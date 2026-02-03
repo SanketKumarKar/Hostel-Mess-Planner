@@ -26,7 +26,9 @@ export interface Profile {
     id: string;
     full_name: string;
     role: 'student' | 'caterer' | 'admin';
-    mess_type?: 'veg' | 'non_veg' | 'special';
+    mess_type?: 'veg' | 'non_veg' | 'special' | 'food_park';
     reg_number?: string;
+    served_mess_types?: string[]; // For caterers
+    assigned_caterer_id?: string; // For students
     created_at: string;
 }

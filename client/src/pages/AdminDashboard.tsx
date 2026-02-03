@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Plus, Trash, PlayCircle, StopCircle, Check, Settings, MessageSquare, Users } from 'lucide-react';
-import type { SystemSetting } from '../types';
+import { Plus, Trash, PlayCircle, StopCircle, Check, Settings, MessageSquare, Users, UserCog, UserX } from 'lucide-react';
+import type { SystemSetting, Profile } from '../types';
 
 interface Session {
     id: string;
@@ -21,6 +21,7 @@ const AdminDashboard = () => {
         totalVotes: 0,
         activeSessions: 0
     });
+    const [activeTab, setActiveTab] = useState<'sessions' | 'caterers'>('sessions');
 
     // New Session Form
     const [title, setTitle] = useState('');
@@ -120,152 +121,179 @@ const AdminDashboard = () => {
                         <Settings size={18} />
                         Settings
                     </button>
-                    <button
-                        onClick={() => setShowCreate(true)}
-                        className="bg-primary text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 font-medium"
-                    >
-                        <Plus size={18} />
-                        New Session
-                    </button>
+                    {activeTab === 'sessions' && (
+                        <button
+                            onClick={() => setShowCreate(true)}
+                            className="bg-primary text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 font-medium"
+                        >
+                            <Plus size={18} />
+                            New Session
+                        </button>
+                    )}
                 </div>
+            </div>
+
+            {/* Tab Switcher */}
+            <div className="flex gap-4 border-b border-gray-200 mb-6">
+                <button
+                    onClick={() => setActiveTab('sessions')}
+                    className={`pb-3 font-medium px-2 transition-all ${activeTab === 'sessions' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    Voting Sessions
+                </button>
+                <button
+                    onClick={() => setActiveTab('caterers')}
+                    className={`pb-3 font-medium px-2 transition-all ${activeTab === 'caterers' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    Manage Caterers
+                </button>
             </div>
 
             {/* Stats Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
-                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full">
-                        <PlayCircle size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500 font-medium">Active Sessions</p>
-                        <h3 className="text-2xl font-bold text-gray-800">{stats.activeSessions}</h3>
-                    </div>
-                </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
-                    <div className="p-3 bg-orange-50 text-orange-600 rounded-full">
-                        <MessageSquare size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500 font-medium">Pending Feedbacks</p>
-                        <h3 className="text-2xl font-bold text-gray-800">{stats.pendingFeedbacks}</h3>
-                    </div>
-                </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
-                    <div className="p-3 bg-green-50 text-green-600 rounded-full">
-                        <Users size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500 font-medium">Total Votes Cast</p>
-                        <h3 className="text-2xl font-bold text-gray-800">{stats.totalVotes}</h3>
-                    </div>
-                </div>
-            </div>
-
-            {showCreate && (
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6 animate-fade-in">
-                    <h3 className="font-semibold text-gray-800">Create New Voting Session</h3>
-                    <p className="text-sm text-gray-500 mb-4">Sessions start in <strong>Draft</strong> mode so caterers can plan the menu before students vote.</p>
-                    <form onSubmit={createSession} className="flex flex-col md:flex-row gap-4 items-end">
-                        <div className="flex-1 w-full">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                            <input type="text" required placeholder="e.g. October Week 1" className="w-full px-3 py-2 border rounded-lg" value={title} onChange={e => setTitle(e.target.value)} />
+            {activeTab === 'sessions' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full">
+                            <PlayCircle size={24} />
                         </div>
-                        <div className="w-full md:w-48">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                            <input type="date" required className="w-full px-3 py-2 border rounded-lg" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                        <div>
+                            <p className="text-sm text-gray-500 font-medium">Active Sessions</p>
+                            <h3 className="text-2xl font-bold text-gray-800">{stats.activeSessions}</h3>
                         </div>
-                        <div className="w-full md:w-48">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                            <input type="date" required className="w-full px-3 py-2 border rounded-lg" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                        <div className="p-3 bg-orange-50 text-orange-600 rounded-full">
+                            <MessageSquare size={24} />
                         </div>
-                        <div className="flex gap-2">
-                            <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-                            <button type="submit" className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700">Create</button>
+                        <div>
+                            <p className="text-sm text-gray-500 font-medium">Pending Feedbacks</p>
+                            <h3 className="text-2xl font-bold text-gray-800">{stats.pendingFeedbacks}</h3>
                         </div>
-                    </form>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                        <div className="p-3 bg-green-50 text-green-600 rounded-full">
+                            <Users size={24} />
+                        </div>
+                        <div>
+                            <p className="text-sm text-gray-500 font-medium">Total Votes Cast</p>
+                            <h3 className="text-2xl font-bold text-gray-800">{stats.totalVotes}</h3>
+                        </div>
+                    </div>
                 </div>
             )}
 
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50 text-gray-500 text-sm">
-                            <tr>
-                                <th className="px-6 py-4 font-medium">Title</th>
-                                <th className="px-6 py-4 font-medium">Dates</th>
-                                <th className="px-6 py-4 font-medium">Votes</th>
-                                <th className="px-6 py-4 font-medium">Status</th>
-                                <th className="px-6 py-4 font-medium text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {sessions.map((session) => (
-                                <tr key={session.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 font-medium text-gray-900">{session.title}</td>
-                                    <td className="px-6 py-4 text-gray-500 text-sm">
-                                        {new Date(session.start_date).toLocaleDateString()} - {new Date(session.end_date).toLocaleDateString()}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <VoteCount sessionId={session.id} />
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 text-xs rounded-full font-medium capitalize 
-                      ${session.status === 'open_for_voting' ? 'bg-green-100 text-green-800' :
-                                                session.status === 'finalized' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
-                                            {session.status.replace('_', ' ')}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
-                                        {session.status === 'draft' && (
-                                            <button onClick={() => updateStatus(session.id, 'open_for_voting')} title="Open Voting" className="p-2 text-green-600 hover:bg-green-50 rounded-lg">
-                                                <PlayCircle size={20} />
-                                            </button>
-                                        )}
-                                        {session.status === 'open_for_voting' && (
-                                            <button onClick={() => updateStatus(session.id, 'closed')} title="Close Voting" className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg">
-                                                <StopCircle size={20} />
-                                            </button>
-                                        )}
+            {activeTab === 'sessions' ? (
+                <>
+                    {showCreate && (
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6 animate-fade-in">
+                            <h3 className="font-semibold text-gray-800">Create New Voting Session</h3>
+                            <p className="text-sm text-gray-500 mb-4">Sessions start in <strong>Draft</strong> mode so caterers can plan the menu before students vote.</p>
+                            <form onSubmit={createSession} className="flex flex-col md:flex-row gap-4 items-end">
+                                <div className="flex-1 w-full">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                    <input type="text" required placeholder="e.g. October Week 1" className="w-full px-3 py-2 border rounded-lg" value={title} onChange={e => setTitle(e.target.value)} />
+                                </div>
+                                <div className="w-full md:w-48">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                    <input type="date" required className="w-full px-3 py-2 border rounded-lg" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                                </div>
+                                <div className="w-full md:w-48">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                    <input type="date" required className="w-full px-3 py-2 border rounded-lg" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                                </div>
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+                                    <button type="submit" className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700">Create</button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
 
-                                        {/* Finalize Menu Button (Only for Closed) */}
-                                        {session.status === 'closed' && (
-                                            <button
-                                                onClick={() => setFinalizingSession(session)}
-                                                className="px-3 py-1 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 flex items-center gap-1"
-                                            >
-                                                Review & Finalize
-                                            </button>
-                                        )}
+                    <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 animate-slide-up">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-gray-50 text-gray-500 text-sm">
+                                    <tr>
+                                        <th className="px-6 py-4 font-medium">Title</th>
+                                        <th className="px-6 py-4 font-medium">Dates</th>
+                                        <th className="px-6 py-4 font-medium">Votes</th>
+                                        <th className="px-6 py-4 font-medium">Status</th>
+                                        <th className="px-6 py-4 font-medium text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {sessions.map((session) => (
+                                        <tr key={session.id} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4 font-medium text-gray-900">{session.title}</td>
+                                            <td className="px-6 py-4 text-gray-500 text-sm">
+                                                {new Date(session.start_date).toLocaleDateString()} - {new Date(session.end_date).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <VoteCount sessionId={session.id} />
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`px-2 py-1 text-xs rounded-full font-medium capitalize 
+                        ${session.status === 'open_for_voting' ? 'bg-green-100 text-green-800' :
+                                                        session.status === 'finalized' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                    {session.status.replace('_', ' ')}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                                                {session.status === 'draft' && (
+                                                    <button onClick={() => updateStatus(session.id, 'open_for_voting')} title="Open Voting" className="p-2 text-green-600 hover:bg-green-50 rounded-lg">
+                                                        <PlayCircle size={20} />
+                                                    </button>
+                                                )}
+                                                {session.status === 'open_for_voting' && (
+                                                    <button onClick={() => updateStatus(session.id, 'closed')} title="Close Voting" className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg">
+                                                        <StopCircle size={20} />
+                                                    </button>
+                                                )}
 
-                                        {/* Edit Final Menu (For Finalized) */}
-                                        {session.status === 'finalized' && (
-                                            <button
-                                                onClick={() => setFinalizingSession(session)}
-                                                className="px-3 py-1 bg-gray-100 text-indigo-600 border border-indigo-200 rounded text-xs font-bold hover:bg-indigo-50"
-                                            >
-                                                Edit Menu
-                                            </button>
-                                        )}
+                                                {/* Finalize Menu Button (Only for Closed) */}
+                                                {session.status === 'closed' && (
+                                                    <button
+                                                        onClick={() => setFinalizingSession(session)}
+                                                        className="px-3 py-1 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 flex items-center gap-1"
+                                                    >
+                                                        Review & Finalize
+                                                    </button>
+                                                )}
 
-                                        {/* PDF Only for Finalized */}
-                                        {session.status === 'finalized' && (
-                                            <div className="flex gap-1 bg-gray-50 p-1 rounded-lg">
-                                                <button onClick={() => generatePDF(session.id, 'veg')} className="px-2 py-1 text-blue-600 hover:bg-blue-100 rounded text-xs font-bold" title="Veg Report">Veg</button>
-                                                <button onClick={() => generatePDF(session.id, 'non_veg')} className="px-2 py-1 text-red-600 hover:bg-red-100 rounded text-xs font-bold" title="Non-Veg Report">NV</button>
-                                                <button onClick={() => generatePDF(session.id, 'special')} className="px-2 py-1 text-purple-600 hover:bg-purple-100 rounded text-xs font-bold" title="Special Report">Spl</button>
-                                            </div>
-                                        )}
+                                                {/* Edit Final Menu (For Finalized) */}
+                                                {session.status === 'finalized' && (
+                                                    <button
+                                                        onClick={() => setFinalizingSession(session)}
+                                                        className="px-3 py-1 bg-gray-100 text-indigo-600 border border-indigo-200 rounded text-xs font-bold hover:bg-indigo-50"
+                                                    >
+                                                        Edit Menu
+                                                    </button>
+                                                )}
 
-                                        <button onClick={() => deleteSession(session.id)} className="p-2 text-gray-400 hover:text-red-600 rounded-lg">
-                                            <Trash size={18} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                                                {/* PDF Only for Finalized */}
+                                                {session.status === 'finalized' && (
+                                                    <div className="flex gap-1 bg-gray-50 p-1 rounded-lg">
+                                                        <button onClick={() => generatePDF(session.id, 'veg')} className="px-2 py-1 text-blue-600 hover:bg-blue-100 rounded text-xs font-bold" title="Veg Report">Veg</button>
+                                                        <button onClick={() => generatePDF(session.id, 'non_veg')} className="px-2 py-1 text-red-600 hover:bg-red-100 rounded text-xs font-bold" title="Non-Veg Report">NV</button>
+                                                        <button onClick={() => generatePDF(session.id, 'special')} className="px-2 py-1 text-purple-600 hover:bg-purple-100 rounded text-xs font-bold" title="Special Report">Spl</button>
+                                                        <button onClick={() => generatePDF(session.id, 'food_park')} className="px-2 py-1 text-teal-600 hover:bg-teal-100 rounded text-xs font-bold" title="Food Park Report">FP</button>
+                                                    </div>
+                                                )}
+
+                                                <button onClick={() => deleteSession(session.id)} className="p-2 text-gray-400 hover:text-red-600 rounded-lg">
+                                                    <Trash size={18} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <CatererManager />
+            )}
 
             {finalizingSession && (
                 <FinalizeMenuModal
@@ -278,6 +306,91 @@ const AdminDashboard = () => {
             )}
 
             {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+        </div>
+    );
+};
+
+const CatererManager = () => {
+    const [caterers, setCaterers] = useState<Profile[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchCaterers = async () => {
+            const { data } = await supabase.from('profiles').select('*').eq('role', 'caterer');
+            setCaterers(data || []);
+            setLoading(false);
+        };
+        fetchCaterers();
+    }, []);
+
+    const deleteCaterer = async (id: string, name: string) => {
+        if (!confirm(`Are you sure you want to remove caterer "${name}"? This action cannot be undone.`)) return;
+
+        // In a real app, you'd likely soft delete or clean up related records first.
+        // Assuming cascade or simple delete for prototype:
+        const { error } = await supabase.from('profiles').delete().eq('id', id);
+
+        if (error) {
+            console.error(error);
+            alert('Failed to delete caterer: ' + error.message);
+        } else {
+            setCaterers(prev => prev.filter(c => c.id !== id));
+        }
+    };
+
+    if (loading) return <div>Loading caterers...</div>;
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 animate-slide-up">
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className="bg-gray-50 text-gray-500 text-sm">
+                        <tr>
+                            <th className="px-6 py-4 font-medium">Name</th>
+                            <th className="px-6 py-4 font-medium">Served Mess Types</th>
+                            <th className="px-6 py-4 font-medium">Registered At</th>
+                            <th className="px-6 py-4 font-medium text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {caterers.length === 0 ? (
+                            <tr><td colSpan={4} className="p-8 text-center text-gray-500">No caterers found.</td></tr>
+                        ) : caterers.map((cat) => (
+                            <tr key={cat.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 text-gray-900 font-medium">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+                                            <UserCog size={16} />
+                                        </div>
+                                        {cat.full_name}
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                    <div className="flex gap-2 flex-wrap">
+                                        {cat.served_mess_types?.map(type => (
+                                            <span key={type} className="px-2 py-0.5 bg-gray-100 rounded text-xs capitalize text-gray-600 border border-gray-200">
+                                                {type.replace('_', ' ')}
+                                            </span>
+                                        )) || <span className="text-gray-400 text-sm">None set</span>}
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 text-gray-500 text-sm">
+                                    {new Date(cat.created_at).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                    <button
+                                        onClick={() => deleteCaterer(cat.id, cat.full_name)}
+                                        className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors flex items-center gap-2 ml-auto text-sm"
+                                    >
+                                        <UserX size={16} />
+                                        Remove
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Plus, X, Trash2, MessageSquare, Check, AlertCircle } from 'lucide-react';
+import { Plus, X, Trash2, MessageSquare, Check, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import type { Feedback } from '../types';
 
@@ -17,6 +17,7 @@ const CatererDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [selectedSession, setSelectedSession] = useState<Session | null>(null);
     const [activeTab, setActiveTab] = useState<'menus' | 'feedback'>('menus');
+    const [showSettings, setShowSettings] = useState(false);
 
     useEffect(() => {
         fetchSessions();
@@ -44,6 +45,13 @@ const CatererDashboard = () => {
             <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">Caterer Dashboard</h2>
                 <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowSettings(true)}
+                        className="px-4 py-2 rounded-lg font-medium transition-colors text-gray-600 hover:bg-gray-100 border border-gray-200 flex items-center gap-2"
+                    >
+                        <Settings size={18} />
+                        Profile Settings
+                    </button>
                     <button
                         onClick={() => setActiveTab('menus')}
                         className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'menus' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
@@ -101,6 +109,8 @@ const CatererDashboard = () => {
             {selectedSession && (
                 <MenuEditor session={selectedSession} onClose={() => setSelectedSession(null)} />
             )}
+
+            {showSettings && <CatererProfileSettings onClose={() => setShowSettings(false)} />}
         </div>
     );
 };
@@ -237,6 +247,7 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                                         <option value="veg">Veg</option>
                                         <option value="non_veg">Non-Veg</option>
                                         <option value="special">Special</option>
+                                        <option value="food_park">Food Park</option>
                                     </select>
                                 </div>
                             </div>
@@ -285,6 +296,7 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                                 <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div> Veg</span>
                                 <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-500"></div> Non-Veg</span>
                                 <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-purple-500"></div> Special</span>
+                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-teal-500"></div> Food Park</span>
                             </div>
                         </div>
 
@@ -316,7 +328,8 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                                                                     <div>
                                                                         <div className="flex items-center gap-2">
                                                                             <span className={`w-2 h-2 rounded-full ${item.mess_type === 'veg' ? 'bg-green-500' :
-                                                                                item.mess_type === 'non_veg' ? 'bg-red-500' : 'bg-purple-500'
+                                                                                item.mess_type === 'non_veg' ? 'bg-orange-500' :
+                                                                                    item.mess_type === 'food_park' ? 'bg-teal-500' : 'bg-purple-500'
                                                                                 }`} title={item.mess_type}></span>
                                                                             <h5 className="font-medium text-gray-900">{item.name}</h5>
                                                                         </div>
@@ -465,6 +478,86 @@ const FeedbackManager = () => {
                     )}
                 </div>
             ))}
+        </div>
+    );
+};
+
+const CatererProfileSettings = ({ onClose }: { onClose: () => void }) => {
+    const { profile } = useAuth();
+    const [servedTypes, setServedTypes] = useState<string[]>([]);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (profile?.served_mess_types) {
+            setServedTypes(profile.served_mess_types);
+        }
+    }, [profile]);
+
+    const handleToggle = (type: string) => {
+        setServedTypes(prev =>
+            prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+        );
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ served_mess_types: servedTypes })
+                .eq('id', profile?.id);
+
+            if (error) throw error;
+            alert('Profile updated successfully!');
+            // Reload to reflect changes globally if needed, or rely on just the DB update
+            window.location.reload();
+        } catch (error: any) {
+            console.error('Error updating profile:', error);
+            alert('Failed to update: ' + error.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm animate-scale-in">
+                <div className="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                        <Settings size={20} />
+                        Caterer Settings
+                    </h3>
+                    <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-full transition-colors">
+                        <X size={20} />
+                    </button>
+                </div>
+                <div className="p-6">
+                    <h4 className="font-bold text-gray-700 mb-3">Served Mess Types</h4>
+                    <div className="space-y-3">
+                        {['veg', 'non_veg', 'special', 'food_park'].map((type) => (
+                            <label key={type} className="flex items-center gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                                <input
+                                    type="checkbox"
+                                    checked={servedTypes.includes(type)}
+                                    onChange={() => handleToggle(type)}
+                                    className="w-5 h-5 text-primary rounded focus:ring-primary"
+                                />
+                                <span className="capitalize font-medium text-gray-700">{type.replace('_', ' ')}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+                <div className="p-6 border-t bg-gray-50 rounded-b-xl flex justify-end gap-3 transition-all">
+                    <button onClick={onClose} className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-medium">Cancel</button>
+                    <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+                    >
+                        {saving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };
