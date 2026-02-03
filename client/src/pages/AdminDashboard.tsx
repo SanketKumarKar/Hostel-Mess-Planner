@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Plus, Trash, PlayCircle, StopCircle, Check } from 'lucide-react';
-// import { saveAs } from 'file-saver'; // Would need this for client side or just generic download
+import { Plus, Trash, PlayCircle, StopCircle, Check, Settings, MessageSquare, Users } from 'lucide-react';
+import type { SystemSetting } from '../types';
 
 interface Session {
     id: string;
@@ -14,7 +14,13 @@ interface Session {
 const AdminDashboard = () => {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [showCreate, setShowCreate] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
     const [finalizingSession, setFinalizingSession] = useState<Session | null>(null);
+    const [stats, setStats] = useState({
+        pendingFeedbacks: 0,
+        totalVotes: 0,
+        activeSessions: 0
+    });
 
     // New Session Form
     const [title, setTitle] = useState('');
@@ -23,6 +29,7 @@ const AdminDashboard = () => {
 
     useEffect(() => {
         fetchSessions();
+        fetchStats();
     }, []);
 
     const fetchSessions = async () => {
@@ -32,6 +39,35 @@ const AdminDashboard = () => {
             setSessions(data || []);
         } catch (error) {
             console.error('Error:', error);
+        }
+    };
+
+    const fetchStats = async () => {
+        try {
+            // Pending Feedbacks
+            const { count: feedbackCount } = await supabase
+                .from('feedbacks')
+                .select('*', { count: 'exact', head: true })
+                .is('response', null);
+
+            // Total Votes
+            const { count: voteCount } = await supabase
+                .from('votes')
+                .select('*', { count: 'exact', head: true });
+
+            // Active Sessions
+            const { count: sessionCount } = await supabase
+                .from('voting_sessions')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'open_for_voting');
+
+            setStats({
+                pendingFeedbacks: feedbackCount || 0,
+                totalVotes: voteCount || 0,
+                activeSessions: sessionCount || 0
+            });
+        } catch (error) {
+            console.error('Error fetching stats:', error);
         }
     };
 
@@ -58,6 +94,7 @@ const AdminDashboard = () => {
     const updateStatus = async (id: string, status: string) => {
         await supabase.from('voting_sessions').update({ status }).eq('id', id);
         fetchSessions();
+        fetchStats();
     };
 
     const deleteSession = async (id: string) => {
@@ -75,13 +112,53 @@ const AdminDashboard = () => {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-800">Admin Dashboard</h2>
-                <button
-                    onClick={() => setShowCreate(true)}
-                    className="bg-primary text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
-                >
-                    <Plus size={18} />
-                    New Session
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowSettings(true)}
+                        className="bg-white text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 border border-gray-200 transition-colors flex items-center gap-2 font-medium"
+                    >
+                        <Settings size={18} />
+                        Settings
+                    </button>
+                    <button
+                        onClick={() => setShowCreate(true)}
+                        className="bg-primary text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 font-medium"
+                    >
+                        <Plus size={18} />
+                        New Session
+                    </button>
+                </div>
+            </div>
+
+            {/* Stats Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full">
+                        <PlayCircle size={24} />
+                    </div>
+                    <div>
+                        <p className="text-sm text-gray-500 font-medium">Active Sessions</p>
+                        <h3 className="text-2xl font-bold text-gray-800">{stats.activeSessions}</h3>
+                    </div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                    <div className="p-3 bg-orange-50 text-orange-600 rounded-full">
+                        <MessageSquare size={24} />
+                    </div>
+                    <div>
+                        <p className="text-sm text-gray-500 font-medium">Pending Feedbacks</p>
+                        <h3 className="text-2xl font-bold text-gray-800">{stats.pendingFeedbacks}</h3>
+                    </div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                    <div className="p-3 bg-green-50 text-green-600 rounded-full">
+                        <Users size={24} />
+                    </div>
+                    <div>
+                        <p className="text-sm text-gray-500 font-medium">Total Votes Cast</p>
+                        <h3 className="text-2xl font-bold text-gray-800">{stats.totalVotes}</h3>
+                    </div>
+                </div>
             </div>
 
             {showCreate && (
@@ -199,6 +276,8 @@ const AdminDashboard = () => {
                     }}
                 />
             )}
+
+            {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
         </div>
     );
 };
@@ -311,7 +390,7 @@ const FinalizeMenuModal = ({ session, onClose }: { session: Session, onClose: ()
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-scale-in">
                 <div className="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
                     <div>
                         <h3 className="text-xl font-bold text-gray-800">Finalize Menu</h3>
@@ -374,5 +453,91 @@ const FinalizeMenuModal = ({ session, onClose }: { session: Session, onClose: ()
         </div>
     );
 };
+
+const SettingsModal = ({ onClose }: { onClose: () => void }) => {
+    const [settings, setSettings] = useState<SystemSetting[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchSettings();
+    }, []);
+
+    const fetchSettings = async () => {
+        const { data } = await supabase.from('system_settings').select('*');
+        setSettings(data as SystemSetting[] || []);
+        setLoading(false);
+    };
+
+    const toggleSetting = async (key: string, currentValue: string) => {
+        const newValue = currentValue === 'true' ? 'false' : 'true';
+
+        // Optimistic update
+        setSettings(prev => prev.map(s => s.setting_key === key ? { ...s, setting_value: newValue } : s));
+
+        try {
+            const { error } = await supabase
+                .from('system_settings')
+                .update({ setting_value: newValue })
+                .eq('setting_key', key);
+
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error updating setting:', error);
+            alert('Failed to update setting');
+            fetchSettings(); // Revert
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md animate-scale-in">
+                <div className="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                        <Settings size={20} />
+                        System Settings
+                    </h3>
+                </div>
+                <div className="p-6 space-y-6">
+                    {loading ? <div>Loading...</div> : (
+                        <>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-bold text-gray-800">Caterer Registration</h4>
+                                    <p className="text-sm text-gray-500">Allow new caterers to sign up</p>
+                                </div>
+                                <Toggle
+                                    enabled={settings.find(s => s.setting_key === 'caterer_registration')?.setting_value === 'true'}
+                                    onToggle={() => toggleSetting('caterer_registration', settings.find(s => s.setting_key === 'caterer_registration')?.setting_value || 'false')}
+                                />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-bold text-gray-800">Admin Registration</h4>
+                                    <p className="text-sm text-gray-500">Allow new admins to sign up</p>
+                                </div>
+                                <Toggle
+                                    enabled={settings.find(s => s.setting_key === 'admin_registration')?.setting_value === 'true'}
+                                    onToggle={() => toggleSetting('admin_registration', settings.find(s => s.setting_key === 'admin_registration')?.setting_value || 'false')}
+                                />
+                            </div>
+                        </>
+                    )}
+                </div>
+                <div className="p-6 border-t bg-gray-50 rounded-b-xl flex justify-end">
+                    <button onClick={onClose} className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-medium">Close</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const Toggle = ({ enabled, onToggle }: { enabled: boolean, onToggle: () => void }) => (
+    <div
+        onClick={onToggle}
+        className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${enabled ? 'bg-green-500' : 'bg-gray-300'}`}
+    >
+        <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${enabled ? 'translate-x-6' : ''}`} />
+    </div>
+);
 
 export default AdminDashboard;

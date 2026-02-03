@@ -23,6 +23,9 @@ const Layout = () => {
                         <nav className="hidden md:flex gap-4">
                             <button onClick={() => navigate('/')} className="text-gray-600 hover:text-primary font-medium">Dashboard</button>
                             <button onClick={() => navigate('/events')} className="text-gray-600 hover:text-primary font-medium">Events</button>
+                            {profile?.role === 'student' && (
+                                <button onClick={() => navigate('/feedback')} className="text-gray-600 hover:text-primary font-medium">Feedback</button>
+                            )}
                         </nav>
                     </div>
                     <div className="flex items-center gap-4">

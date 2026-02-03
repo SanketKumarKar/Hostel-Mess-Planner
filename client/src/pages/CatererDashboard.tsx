@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Plus, X, Trash2 } from 'lucide-react';
+import { Plus, X, Trash2, MessageSquare, Check, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import type { Feedback } from '../types';
 
 interface Session {
     id: string;
@@ -14,6 +16,7 @@ const CatererDashboard = () => {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+    const [activeTab, setActiveTab] = useState<'menus' | 'feedback'>('menus');
 
     useEffect(() => {
         fetchSessions();
@@ -38,43 +41,61 @@ const CatererDashboard = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">Caterer Dashboard</h2>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setActiveTab('menus')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'menus' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                        Menu Planning
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('feedback')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'feedback' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                        Feedbacks
+                    </button>
+                </div>
             </div>
 
-            {loading ? (
-                <div className="text-center py-10">Loading sessions...</div>
-            ) : sessions.length === 0 ? (
-                <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-                    <p className="text-gray-500 text-lg">No active menu planning sessions found.</p>
-                    <p className="text-sm text-gray-400 mt-2">Wait for an admin to create a new session.</p>
-                </div>
-            ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {sessions.map((session) => (
-                        <div key={session.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-                            <div className="p-6">
-                                <div className="flex justify-between items-start mb-4">
-                                    <h3 className="text-lg font-semibold text-gray-900">{session.title}</h3>
-                                    <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full font-medium capitalize">
-                                        {session.status.replace('_', ' ')}
-                                    </span>
+            {activeTab === 'menus' ? (
+                loading ? (
+                    <div className="text-center py-10">Loading sessions...</div>
+                ) : sessions.length === 0 ? (
+                    <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+                        <p className="text-gray-500 text-lg">No active menu planning sessions found.</p>
+                        <p className="text-sm text-gray-400 mt-2">Wait for an admin to create a new session.</p>
+                    </div>
+                ) : (
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {sessions.map((session) => (
+                            <div key={session.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                                <div className="p-6">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <h3 className="text-lg font-semibold text-gray-900">{session.title}</h3>
+                                        <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full font-medium capitalize">
+                                            {session.status.replace('_', ' ')}
+                                        </span>
+                                    </div>
+                                    <div className="text-sm text-gray-500 mb-6">
+                                        <p>From: {new Date(session.start_date).toLocaleDateString()}</p>
+                                        <p>To: {new Date(session.end_date).toLocaleDateString()}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setSelectedSession(session)}
+                                        className="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <Plus size={18} />
+                                        Add Menu Items
+                                    </button>
                                 </div>
-                                <div className="text-sm text-gray-500 mb-6">
-                                    <p>From: {new Date(session.start_date).toLocaleDateString()}</p>
-                                    <p>To: {new Date(session.end_date).toLocaleDateString()}</p>
-                                </div>
-                                <button
-                                    onClick={() => setSelectedSession(session)}
-                                    className="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <Plus size={18} />
-                                    Add Menu Items
-                                </button>
                             </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                )
+            ) : (
+                <FeedbackManager />
             )}
 
             {selectedSession && (
@@ -282,7 +303,7 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                                         <div className="divide-y">
                                             {['breakfast', 'lunch', 'snacks', 'dinner'].map(meal => {
                                                 const mealItems = meals[meal] || [];
-                                                if (mealItems.length === 0) return null; // Hide empty meals or show placeholder? Let's hide for now or show "No items"
+                                                if (mealItems.length === 0) return null;
 
                                                 return (
                                                     <div key={meal} className="p-4 flex gap-4">
@@ -326,6 +347,124 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                     </div>
                 </div>
             </div>
+        </div>
+    );
+};
+
+const FeedbackManager = () => {
+    const { profile } = useAuth();
+    const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [responseInput, setResponseInput] = useState<{ [key: string]: string }>({});
+    const [submitting, setSubmitting] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (profile) fetchFeedbacks();
+    }, [profile]);
+
+    const fetchFeedbacks = async () => {
+        setLoading(true);
+        try {
+            const { data } = await supabase
+                .from('feedbacks')
+                .select('*, student:profiles!student_id(full_name, reg_number)')
+                .eq('caterer_id', profile.id)
+                .order('created_at', { ascending: false });
+
+            setFeedbacks(data as Feedback[] || []);
+        } catch (error) {
+            console.error('Error fetching feedbacks:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResponse = async (feedbackId: string) => {
+        const responseText = responseInput[feedbackId];
+        if (!responseText?.trim()) return;
+
+        setSubmitting(feedbackId);
+        try {
+            const { error } = await supabase
+                .from('feedbacks')
+                .update({ response: responseText })
+                .eq('id', feedbackId);
+
+            if (error) throw error;
+
+            alert('Response sent!');
+            setResponseInput(prev => ({ ...prev, [feedbackId]: '' }));
+            fetchFeedbacks();
+        } catch (error) {
+            console.error('Error responding:', error);
+            alert('Failed to send response');
+        } finally {
+            setSubmitting(null);
+        }
+    };
+
+    if (loading) return <div>Loading feedbacks...</div>;
+
+    if (feedbacks.length === 0) return (
+        <div className="text-center py-20 bg-white rounded-xl border border-gray-100">
+            <MessageSquare size={48} className="mx-auto text-gray-300 mb-3" />
+            <p className="text-gray-500">No feedbacks received yet.</p>
+        </div>
+    );
+
+    return (
+        <div className="space-y-4">
+            {feedbacks.map(fb => (
+                <div key={fb.id} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-700 font-bold">
+                                {fb.student?.full_name?.[0] || 'S'}
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-gray-800">{fb.student?.full_name || 'Anonymous Student'}</h4>
+                                <p className="text-xs text-gray-500">{fb.student?.reg_number || 'No Reg Num'}</p>
+                            </div>
+                        </div>
+                        <span className="text-xs text-gray-400">{new Date(fb.created_at).toLocaleDateString()}</span>
+                    </div>
+
+                    <div className="ml-13 pl-13 mb-4">
+                        <p className="text-gray-700 bg-gray-50 p-4 rounded-lg rounded-tl-none border border-gray-100">
+                            {fb.message}
+                        </p>
+                    </div>
+
+                    {fb.response ? (
+                        <div className="ml-10 bg-green-50 p-4 rounded-lg border border-green-100 flex gap-3">
+                            <Check className="text-green-600 mt-0.5" size={18} />
+                            <div>
+                                <p className="text-xs font-bold text-green-700 uppercase mb-1">Your Response</p>
+                                <p className="text-sm text-gray-800">{fb.response}</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="ml-10">
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="Type your response..."
+                                    className="flex-1 border rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary/20 outline-none"
+                                    value={responseInput[fb.id] || ''}
+                                    onChange={e => setResponseInput({ ...responseInput, [fb.id]: e.target.value })}
+                                />
+                                <button
+                                    onClick={() => handleResponse(fb.id)}
+                                    disabled={submitting === fb.id || !responseInput[fb.id]}
+                                    className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-medium"
+                                >
+                                    {submitting === fb.id ? 'Sending...' : 'Reply'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            ))}
         </div>
     );
 };

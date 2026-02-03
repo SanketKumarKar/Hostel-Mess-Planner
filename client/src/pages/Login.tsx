@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,6 +14,19 @@ const Login = () => {
     const [regNumber, setRegNumber] = useState('');
     const [messType, setMessType] = useState<'veg' | 'non_veg' | 'special'>('veg');
     const [role, setRole] = useState<'student' | 'caterer' | 'admin'>('student');
+    const [settings, setSettings] = useState<{ caterer: boolean, admin: boolean }>({ caterer: true, admin: true });
+
+    useEffect(() => {
+        const checkSettings = async () => {
+            const { data } = await supabase.from('system_settings').select('*');
+            if (data) {
+                const caterer = data.find(s => s.setting_key === 'caterer_registration')?.setting_value === 'true';
+                const admin = data.find(s => s.setting_key === 'admin_registration')?.setting_value === 'true';
+                setSettings({ caterer: !!caterer, admin: !!admin });
+            }
+        };
+        checkSettings();
+    }, []);
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -147,10 +160,16 @@ const Login = () => {
                                     onChange={(e) => setRole(e.target.value as 'student' | 'caterer' | 'admin')}
                                 >
                                     <option value="student">Student</option>
-                                    <option value="caterer">Caterer</option>
-                                    <option value="admin">Admin</option>
+                                    {settings.caterer && <option value="caterer">Caterer</option>}
+                                    {settings.admin && <option value="admin">Admin</option>}
                                 </select>
                             </div>
+
+                            {!settings.caterer && !settings.admin && role === 'student' && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    * Registration for Caterers and Admins is currently closed.
+                                </p>
+                            )}
 
                             {role === 'student' && (
                                 <>
