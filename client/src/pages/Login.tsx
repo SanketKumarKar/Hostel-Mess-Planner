@@ -40,7 +40,7 @@ const Login = () => {
 
             // Logic: Find caterers who have 'messType' in their served_mess_types array
             // PostgreSQL operator for array contains is @> but Supabase uses .cs (contains)
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('profiles')
                 .select('id, full_name, served_mess_types')
                 .eq('role', 'caterer')
@@ -131,7 +131,7 @@ const Login = () => {
                 }
             } else {
                 // Sign in
-                const { data, error } = await supabase.auth.signInWithPassword({
+                const { error } = await supabase.auth.signInWithPassword({
                     email,
                     password,
                 });
