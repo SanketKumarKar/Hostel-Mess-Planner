@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
-import { Check, Calendar, Clock, Utensils } from 'lucide-react';
+import { Check, Calendar, Clock, Utensils, Megaphone } from 'lucide-react';
 
 interface Session {
     id: string;
@@ -9,6 +9,7 @@ interface Session {
     start_date: string;
     end_date: string;
     status: string;
+    week_label?: string;
 }
 
 interface MenuItem {
@@ -19,6 +20,15 @@ interface MenuItem {
     meal_type: string;
     mess_type: string;
     session_id: string;
+}
+
+interface Announcement {
+    id: string;
+    title: string;
+    body: string;
+    mess_type: string;
+    caterer_id: string;
+    created_at: string;
 }
 
 const StudentDashboard = () => {
@@ -52,23 +62,16 @@ const StudentDashboard = () => {
                 .order('start_date', { ascending: false });
 
             if (error) throw error;
-
             const allSessions = data || [];
             setSessions(allSessions);
 
-            // Determine Priority for Default View
-            // 1. Open for Voting
-            // 2. Draft
-            // 3. Finalized (Latest)
             if (allSessions.length > 0) {
                 const openSession = allSessions.find(s => s.status === 'open_for_voting');
                 const draftSession = allSessions.find(s => s.status === 'draft');
-
                 if (openSession) setSelectedSession(openSession);
                 else if (draftSession) setSelectedSession(draftSession);
-                else setSelectedSession(allSessions[0]); // Latest finalized (due to sort)
+                else setSelectedSession(allSessions[0]);
             }
-
         } catch (error) {
             console.error('Error fetching sessions:', error);
         } finally {
@@ -93,78 +96,61 @@ const StudentDashboard = () => {
         );
     }
 
-    // Session Switcher UI Component
     const SessionSwitcher = () => (
         sessions.length > 1 ? (
             <div className="mb-6 flex justify-end">
-                <div className="relative inline-block text-left">
-                    <select
-                        value={selectedSession.id}
-                        onChange={(e) => {
-                            const s = sessions.find(s => s.id === e.target.value);
-                            if (s) setSelectedSession(s);
-                        }}
-                        className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md shadow-sm bg-white"
-                    >
-                        {sessions.map(s => (
-                            <option key={s.id} value={s.id}>
-                                {s.title} ({s.status.replace('_', ' ')})
-                            </option>
-                        ))}
-                    </select>
-                </div>
+                <select
+                    value={selectedSession.id}
+                    onChange={(e) => {
+                        const s = sessions.find(s => s.id === e.target.value);
+                        if (s) setSelectedSession(s);
+                    }}
+                    className="block pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md shadow-sm bg-white"
+                >
+                    {sessions.map(s => (
+                        <option key={s.id} value={s.id}>
+                            {s.title} {s.week_label ? `[${s.week_label === 'week1' ? 'Week 1' : 'Week 2'}]` : ''} ({s.status.replace('_', ' ')})
+                        </option>
+                    ))}
+                </select>
             </div>
         ) : null
     );
 
-    // New "Draft" / Planning Mode View
+    // Draft mode view
     if (selectedSession.status === 'draft') {
         return (
             <div className="space-y-6">
                 <SessionSwitcher />
                 <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden text-center">
                     <div className="relative z-10 flex flex-col items-center">
-                        <div className="bg-white/20 p-3 rounded-full mb-3 animate-pulse">
-                            <Utensils size={32} />
-                        </div>
+                        <div className="bg-white/20 p-3 rounded-full mb-3 animate-pulse"><Utensils size={32} /></div>
                         <h2 className="text-2xl font-bold mb-2">Menu Planning in Progress</h2>
                         <p className="text-lg opacity-90 mb-4 max-w-lg">
-                            Menu items planning is currently going on for <strong>{selectedSession.title}</strong>.
+                            Menu items are being planned for <strong>{selectedSession.title}</strong>.
                         </p>
-
                         <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 w-full max-w-sm border border-white/20">
-                            <h3 className="font-semibold mb-3 flex items-center justify-center gap-2 text-sm">
-                                <Calendar size={16} />
-                                Upcoming Menu Dates
-                            </h3>
+                            <h3 className="font-semibold mb-3 flex items-center justify-center gap-2 text-sm"><Calendar size={16} />Upcoming Dates</h3>
                             <div className="space-y-2 text-sm">
                                 <div className="flex justify-between items-center border-b border-white/10 pb-2">
-                                    <span className="opacity-75">Start Date</span>
+                                    <span className="opacity-75">Start</span>
                                     <span className="font-bold">{new Date(selectedSession.start_date).toLocaleDateString()}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="opacity-75">End Date</span>
+                                    <span className="opacity-75">End</span>
                                     <span className="font-bold">{new Date(selectedSession.end_date).toLocaleDateString()}</span>
                                 </div>
                             </div>
                         </div>
-
                         <div className="mt-6 flex items-center gap-2 text-xs bg-black/20 px-3 py-1.5 rounded-full">
-                            <Clock size={14} />
-                            <span>Voting will open soon. Please check back later.</span>
+                            <Clock size={14} /><span>Voting will open soon. Please check back later.</span>
                         </div>
                     </div>
                 </div>
-
-                {/* Profile Edit Option even in Draft Status */}
                 {profile?.role === 'student' && (
                     <div className="text-center mt-4">
-                        <p className="text-gray-600 mb-2">
-                            Current Mess: <span className="font-bold capitalize">{profile.mess_type?.replace('_', ' ') || 'Not Set'}</span>
-                        </p>
-                        <button onClick={() => setShowProfileEdit(true)} className="text-primary hover:text-indigo-700 text-sm font-medium hover:underline">
-                            Update Mess Type Preference
-                        </button>
+                        <p className="text-gray-600 mb-2">Current Mess: <span className="font-bold capitalize">{profile.mess_type?.replace('_', ' ') || 'Not Set'}</span></p>
+                        <button onClick={() => setShowProfileEdit(true)} className="text-primary hover:text-indigo-700 text-sm font-medium hover:underline">Update Mess Type Preference</button>
                     </div>
                 )}
                 {showProfileEdit && <ProfileEditor onClose={() => setShowProfileEdit(false)} />}
@@ -175,16 +161,24 @@ const StudentDashboard = () => {
     return (
         <div className="space-y-6">
             <SessionSwitcher />
+
+            {/* Header Banner */}
             <div className="bg-gradient-to-r from-primary to-secondary rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
                 <div className="relative z-10">
-                    <h2 className="text-2xl font-bold mb-2">{selectedSession.title}</h2>
+                    <div className="flex items-center gap-3 mb-1">
+                        <h2 className="text-2xl font-bold">{selectedSession.title}</h2>
+                        {selectedSession.week_label && (
+                            <span className={`text-xs px-3 py-1 rounded-full font-bold uppercase ${selectedSession.week_label === 'week1' ? 'bg-blue-400/30' : 'bg-violet-400/30'}`}>
+                                {selectedSession.week_label === 'week1' ? 'Week 1' : 'Week 2'}
+                            </span>
+                        )}
+                    </div>
                     <p className="opacity-90 flex items-center gap-2">
                         <Calendar size={18} />
-                        {selectedSession.status === 'finalized' ? (
-                            <span className="font-bold bg-white/20 px-2 py-0.5 rounded">Final Menu Confirmed</span>
-                        ) : (
-                            <span>Voting Open: {new Date(selectedSession.start_date).toLocaleDateString()} - {new Date(selectedSession.end_date).toLocaleDateString()}</span>
-                        )}
+                        {selectedSession.status === 'finalized'
+                            ? <span className="font-bold bg-white/20 px-2 py-0.5 rounded">Final Menu Confirmed</span>
+                            : <span>Voting Open: {new Date(selectedSession.start_date).toLocaleDateString()} - {new Date(selectedSession.end_date).toLocaleDateString()}</span>
+                        }
                     </p>
                     {profile?.mess_type && (
                         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -196,17 +190,11 @@ const StudentDashboard = () => {
                                     Caterer: {assignedCaterer.full_name}
                                 </div>
                             )}
-                            <button
-                                onClick={() => setShowProfileEdit(true)}
-                                className="text-xs bg-white text-primary px-3 py-1.5 rounded-full font-bold hover:bg-gray-100 transition-colors"
-                            >
+                            <button onClick={() => setShowProfileEdit(true)} className="text-xs bg-white text-primary px-3 py-1.5 rounded-full font-bold hover:bg-gray-100 transition-colors">
                                 Change
                             </button>
                             {selectedSession.status === 'open_for_voting' && (
-                                <button
-                                    onClick={() => window.location.reload()}
-                                    className="text-xs bg-white/20 text-white px-3 py-1.5 rounded-full font-bold hover:bg-white/30 transition-colors flex items-center gap-1"
-                                >
+                                <button onClick={() => window.location.reload()} className="text-xs bg-white/20 text-white px-3 py-1.5 rounded-full font-bold hover:bg-white/30 transition-colors flex items-center gap-1">
                                     ↻ Refresh Menu
                                 </button>
                             )}
@@ -214,6 +202,11 @@ const StudentDashboard = () => {
                     )}
                 </div>
             </div>
+
+            {/* Announcements Panel - scoped to assigned caterer */}
+            {profile?.assigned_caterer_id && profile?.mess_type && (
+                <AnnouncementsPanel catererId={profile.assigned_caterer_id} messType={profile.mess_type} />
+            )}
 
             {selectedSession.status === 'finalized' ? (
                 <FinalMenuDisplay session={selectedSession} />
@@ -226,46 +219,80 @@ const StudentDashboard = () => {
     );
 };
 
+// ─────────────────────────────────────────────
+// Announcements Panel (scoped by caterer + mess_type)
+// ─────────────────────────────────────────────
+const AnnouncementsPanel = ({ catererId, messType }: { catererId: string, messType: string }) => {
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [expanded, setExpanded] = useState(true);
+
+    useEffect(() => {
+        supabase
+            .from('announcements')
+            .select('*')
+            .eq('caterer_id', catererId)
+            .eq('mess_type', messType)
+            .order('created_at', { ascending: false })
+            .then(({ data }) => {
+                setAnnouncements(data || []);
+                setLoading(false);
+            });
+    }, [catererId, messType]);
+
+    if (loading || announcements.length === 0) return null;
+
+    return (
+        <div className="rounded-xl border border-amber-200 overflow-hidden shadow-sm">
+            <button
+                onClick={() => setExpanded(!expanded)}
+                className="w-full flex items-center justify-between px-5 py-3 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-800 font-semibold hover:from-amber-100 hover:to-orange-100 transition-colors"
+            >
+                <span className="flex items-center gap-2">
+                    <Megaphone size={18} className="text-amber-500" />
+                    📢 Announcements from your Caterer
+                    <span className="bg-amber-400 text-white text-xs px-2 py-0.5 rounded-full font-bold">{announcements.length}</span>
+                </span>
+                <span className="text-amber-400">{expanded ? '▲' : '▼'}</span>
+            </button>
+            {expanded && (
+                <div className="divide-y divide-amber-100 bg-white">
+                    {announcements.map(ann => (
+                        <div key={ann.id} className="p-5">
+                            <div className="flex justify-between items-start mb-1">
+                                <h4 className="font-bold text-gray-900">{ann.title}</h4>
+                                <span className="text-xs text-gray-400">{new Date(ann.created_at).toLocaleDateString()}</span>
+                            </div>
+                            <p className="text-gray-600 text-sm">{ann.body}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ─────────────────────────────────────────────
+// Profile Editor (unchanged)
+// ─────────────────────────────────────────────
 const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
     const { profile } = useAuth();
     const [messType, setMessType] = useState(profile?.mess_type || 'veg');
     const [updating, setUpdating] = useState(false);
 
-    useEffect(() => {
-        if (profile?.mess_type) {
-            setMessType(profile.mess_type);
-        }
-    }, [profile]);
+    useEffect(() => { if (profile?.mess_type) setMessType(profile.mess_type); }, [profile]);
 
     const handleUpdate = async () => {
         setUpdating(true);
         try {
-            // Check if changing
             if (profile?.mess_type !== messType) {
-                // Clear existing votes since mess type changed
-                const { error: deleteError } = await supabase
-                    .from('votes')
-                    .delete()
-                    .eq('user_id', profile?.id);
-
-                if (deleteError) throw deleteError;
-                console.log('Previous votes cleared due to mess change.');
+                await supabase.from('votes').delete().eq('user_id', profile?.id);
             }
-
-            const { error } = await supabase
-                .from('profiles')
-                .update({ mess_type: messType })
-                .eq('id', profile?.id);
-
+            const { error } = await supabase.from('profiles').update({ mess_type: messType }).eq('id', profile?.id);
             if (error) throw error;
-
-            alert(profile?.mess_type !== messType
-                ? 'Mess type updated! Previous votes were cleared. Please vote again.'
-                : 'Profile updated!');
-
+            alert(profile?.mess_type !== messType ? 'Mess type updated! Previous votes cleared.' : 'Profile updated!');
             window.location.reload();
         } catch (error) {
-            console.error(error);
             alert('Error updating profile');
         } finally {
             setUpdating(false);
@@ -279,25 +306,14 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
                 <div className="space-y-3 mb-6">
                     {['veg', 'non_veg', 'special', 'food_park'].map((t) => (
                         <label key={t} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                            <input
-                                type="radio"
-                                name="messType"
-                                value={t}
-                                checked={messType === t}
-                                onChange={e => setMessType(e.target.value)}
-                                className="text-primary focus:ring-primary h-5 w-5"
-                            />
+                            <input type="radio" name="messType" value={t} checked={messType === t} onChange={e => setMessType(e.target.value)} className="text-primary focus:ring-primary h-5 w-5" />
                             <span className="capitalize font-medium text-gray-700">{t.replace('_', ' ')}</span>
                         </label>
                     ))}
                 </div>
                 <div className="flex gap-3">
                     <button onClick={onClose} className="flex-1 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-                    <button
-                        onClick={handleUpdate}
-                        disabled={updating}
-                        className="flex-1 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700"
-                    >
+                    <button onClick={handleUpdate} disabled={updating} className="flex-1 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700">
                         {updating ? 'Saving...' : 'Save Update'}
                     </button>
                 </div>
@@ -306,6 +322,9 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
     );
 };
 
+// ─────────────────────────────────────────────
+// Voting Interface — only shows approved items
+// ─────────────────────────────────────────────
 const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditProfile: () => void }) => {
     const { profile } = useAuth();
     const [items, setItems] = useState<MenuItem[]>([]);
@@ -313,33 +332,28 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (profile?.mess_type) {
-            fetchItemsAndVotes();
-        }
+        if (profile?.mess_type) fetchItemsAndVotes();
     }, [session.id, profile?.mess_type]);
 
     const fetchItemsAndVotes = async () => {
         setLoading(true);
         try {
-            // Fetch items for the student's mess type
+            // Only fetch APPROVED items for student voting
             const { data: menuItems } = await supabase
                 .from('menu_items')
                 .select('*')
                 .eq('session_id', session.id)
                 .eq('mess_type', profile.mess_type)
+                .eq('approval_status', 'approved')
                 .order('date_served', { ascending: true })
                 .order('meal_type', { ascending: true });
 
-            // Fetch user's existing votes
-            const { data: userVotes } = await supabase
-                .from('votes')
-                .select('menu_item_id')
-                .eq('user_id', profile.id);
+            const { data: userVotes } = await supabase.from('votes').select('menu_item_id').eq('user_id', profile.id);
 
             setItems(menuItems || []);
             setVotes(new Set(userVotes?.map(v => v.menu_item_id) || []));
         } catch (error) {
-            console.error('Error data:', error);
+            console.error('Error fetching data:', error);
         } finally {
             setLoading(false);
         }
@@ -351,42 +365,23 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
         const isVoted = votes.has(targetItem.id);
 
         if (isVoted) {
-            // UNVOTE
             newVotes.delete(targetItem.id);
             setVotes(newVotes);
             const { error } = await supabase.from('votes').delete().match({ user_id: profile?.id, menu_item_id: targetItem.id });
-            if (error) {
-                setVotes(previousVotes);
-                console.error('Error unvoting');
-            }
+            if (error) { setVotes(previousVotes); }
         } else {
-            // EXCLUSIVE VOTE
-            // 1. Check for conflict in same slot (same date & same meal_type)
-            const conflictingItem = items.find(
-                i => i.date_served === targetItem.date_served &&
-                    i.meal_type === targetItem.meal_type &&
-                    votes.has(i.id)
-            );
-
-            // 2. Remove conflict if exists
+            const conflictingItem = items.find(i => i.date_served === targetItem.date_served && i.meal_type === targetItem.meal_type && votes.has(i.id));
             if (conflictingItem) {
                 newVotes.delete(conflictingItem.id);
                 await supabase.from('votes').delete().match({ user_id: profile?.id, menu_item_id: conflictingItem.id });
             }
-
-            // 3. Add new vote
             newVotes.add(targetItem.id);
             setVotes(newVotes);
-
             const { error } = await supabase.from('votes').insert({ user_id: profile?.id, menu_item_id: targetItem.id });
-            if (error) {
-                setVotes(previousVotes);
-                console.error('Error voting');
-            }
+            if (error) { setVotes(previousVotes); }
         }
     };
 
-    // Group items by Date -> Meal Type
     const groupedItems = items.reduce((acc, item) => {
         const date = item.date_served;
         if (!acc[date]) acc[date] = {};
@@ -395,17 +390,11 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
         return acc;
     }, {} as Record<string, Record<string, MenuItem[]>>);
 
-
     if (!profile?.mess_type) {
         return (
             <div className="p-8 text-center">
                 <p className="text-gray-500 mb-4">Please update your profile with a mess type to vote.</p>
-                <button
-                    onClick={onEditProfile}
-                    className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-                >
-                    Set Mess Preference
-                </button>
+                <button onClick={onEditProfile} className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors">Set Mess Preference</button>
             </div>
         );
     }
@@ -415,16 +404,11 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
     if (items.length === 0) {
         return (
             <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100">
-                <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Calendar className="text-gray-400" size={32} />
-                </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">No Menu Items Found</h3>
-                <p className="text-gray-500 max-w-md mx-auto mb-6">
-                    There are no menu items listed for <span className="font-semibold text-primary capitalize">{profile.mess_type.replace('_', ' ')}</span> mess yet.
+                <Calendar className="text-gray-400 mx-auto mb-4" size={32} />
+                <h3 className="text-lg font-bold text-gray-900 mb-2">No Menu Items Available Yet</h3>
+                <p className="text-gray-500 max-w-md mx-auto">
+                    Menu items for <span className="font-semibold text-primary capitalize">{profile.mess_type.replace('_', ' ')}</span> mess are being reviewed by the admin. Check back soon!
                 </p>
-                <div className="flex justify-center gap-4">
-                    <p className="text-sm text-gray-400">If you belong to a different mess, update your profile.</p>
-                </div>
             </div>
         );
     }
@@ -440,7 +424,6 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
                         {['breakfast', 'lunch', 'snacks', 'dinner'].map((mealType) => {
                             const options: MenuItem[] | undefined = meals[mealType];
                             if (!options?.length) return null;
-
                             return (
                                 <div key={mealType} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                                     <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">{mealType}</h4>
@@ -451,13 +434,7 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
                                                 <div
                                                     key={item.id}
                                                     onClick={() => handleVote(item)}
-                                                    className={`
-                                                        relative cursor-pointer rounded-lg border-2 p-4 transition-all group
-                                                        ${isVoted
-                                                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                                                            : 'border-gray-100 hover:border-gray-300 hover:shadow-md'
-                                                        }
-                                                    `}
+                                                    className={`relative cursor-pointer rounded-lg border-2 p-4 transition-all group ${isVoted ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-gray-100 hover:border-gray-300 hover:shadow-md'}`}
                                                 >
                                                     <div className="flex justify-between items-start mb-2">
                                                         <h5 className="font-semibold text-gray-900">{item.name}</h5>
@@ -468,10 +445,7 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
                                                         )}
                                                     </div>
                                                     <p className="text-sm text-gray-500 line-clamp-2 mb-3">{item.description}</p>
-
-                                                    <button
-                                                        className={`w-full py-1.5 rounded text-sm font-medium transition-colors ${isVoted ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 group-hover:bg-primary group-hover:text-white'}`}
-                                                    >
+                                                    <button className={`w-full py-1.5 rounded text-sm font-medium transition-colors ${isVoted ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 group-hover:bg-primary group-hover:text-white'}`}>
                                                         {isVoted ? 'Voted' : 'Vote'}
                                                     </button>
                                                 </div>
@@ -488,39 +462,28 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
     );
 };
 
+// ─────────────────────────────────────────────
+// Final Menu Display (unchanged logic)
+// ─────────────────────────────────────────────
 const FinalMenuDisplay = ({ session }: { session: Session }) => {
     const { profile } = useAuth();
     const [items, setItems] = useState<MenuItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchFinalItems = async () => {
-            if (!profile?.mess_type) return;
-
-            const { data } = await supabase
-                .from('menu_items')
-                .select('*')
-                .eq('session_id', session.id)
-                .is('is_selected', true) // Only selected items
-                .eq('mess_type', profile.mess_type)
-                .order('date_served', { ascending: true })
-                .order('meal_type', { ascending: true });
-
-            setItems(data || []);
-            setLoading(false);
-        };
-        fetchFinalItems();
+        if (!profile?.mess_type) return;
+        supabase.from('menu_items').select('*')
+            .eq('session_id', session.id)
+            .is('is_selected', true)
+            .eq('mess_type', profile.mess_type)
+            .order('date_served', { ascending: true })
+            .order('meal_type', { ascending: true })
+            .then(({ data }) => { setItems(data || []); setLoading(false); });
     }, [session.id, profile?.mess_type]);
 
     if (loading) return <div className="text-center py-10">Loading final menu...</div>;
+    if (items.length === 0) return <div className="text-center py-10 text-gray-500">No items finalized for {profile?.mess_type?.replace('_', ' ')} mess yet.</div>;
 
-    if (items.length === 0) return (
-        <div className="text-center py-10 text-gray-500">
-            No items finalized for {profile?.mess_type.replace('_', ' ')} mess yet.
-        </div>
-    );
-
-    // Group items
     const grouped = items.reduce((acc, item) => {
         const date = item.date_served;
         if (!acc[date]) acc[date] = {};
@@ -541,12 +504,9 @@ const FinalMenuDisplay = ({ session }: { session: Session }) => {
                         {['breakfast', 'lunch', 'snacks', 'dinner'].map((mealType) => {
                             const options = meals[mealType];
                             if (!options?.length) return null;
-
                             return (
                                 <div key={mealType} className="bg-white rounded-xl shadow-sm border border-green-100 p-6 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 p-4 opacity-10">
-                                        <Check size={100} />
-                                    </div>
+                                    <div className="absolute top-0 right-0 p-4 opacity-10"><Check size={100} /></div>
                                     <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 relative z-10">{mealType}</h4>
                                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
                                         {options.map((item) => (
@@ -565,4 +525,5 @@ const FinalMenuDisplay = ({ session }: { session: Session }) => {
         </div>
     );
 };
+
 export default StudentDashboard;

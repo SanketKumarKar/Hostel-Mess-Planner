@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Plus, X, Trash2, MessageSquare, Check, Settings } from 'lucide-react';
+import { Plus, X, Trash2, MessageSquare, Check, Settings, Sparkles, Loader2, Megaphone, Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import type { Feedback } from '../types';
+import axios from 'axios';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 interface Session {
     id: string;
@@ -12,11 +15,16 @@ interface Session {
     status: string;
 }
 
+interface AISuggestion {
+    name: string;
+    description: string;
+}
+
 const CatererDashboard = () => {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedSession, setSelectedSession] = useState<Session | null>(null);
-    const [activeTab, setActiveTab] = useState<'menus' | 'feedback'>('menus');
+    const [activeTab, setActiveTab] = useState<'menus' | 'feedback' | 'announcements'>('menus');
     const [showSettings, setShowSettings] = useState(false);
 
     useEffect(() => {
@@ -28,7 +36,7 @@ const CatererDashboard = () => {
             const { data, error } = await supabase
                 .from('voting_sessions')
                 .select('*')
-                .eq('status', 'draft') // Only show draft sessions where caterers can add items
+                .eq('status', 'draft')
                 .order('start_date', { ascending: true });
 
             if (error) throw error;
@@ -57,6 +65,13 @@ const CatererDashboard = () => {
                         className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'menus' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
                     >
                         Menu Planning
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('announcements')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${activeTab === 'announcements' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                        <Megaphone size={16} />
+                        Announcements
                     </button>
                     <button
                         onClick={() => setActiveTab('feedback')}
@@ -102,6 +117,8 @@ const CatererDashboard = () => {
                         ))}
                     </div>
                 )
+            ) : activeTab === 'announcements' ? (
+                <AnnouncementManager />
             ) : (
                 <FeedbackManager />
             )}
@@ -115,16 +132,27 @@ const CatererDashboard = () => {
     );
 };
 
+// ─────────────────────────────────────────────
+// Menu Editor with AI Dish Suggester
+// ─────────────────────────────────────────────
 const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => void }) => {
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
 
-    // Form State
+    // Manual form state
     const [date, setDate] = useState(session.start_date);
     const [mealType, setMealType] = useState('breakfast');
     const [messType, setMessType] = useState('veg');
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
+
+    // AI Suggester state
+    const [showAI, setShowAI] = useState(false);
+    const [ingredients, setIngredients] = useState('');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([]);
+    const [aiError, setAiError] = useState('');
+    const [addingAiItem, setAddingAiItem] = useState<string | null>(null);
 
     const fetchItems = async () => {
         const { data } = await supabase
@@ -149,11 +177,10 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                 mess_type: messType,
                 name,
                 description,
+                approval_status: 'pending',
             });
 
             if (error) throw error;
-
-            // Reset form (keep date/meal/mess for faster entry)
             setName('');
             setDescription('');
             fetchItems();
@@ -162,6 +189,51 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
             alert('Failed to add item');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleAISuggest = async () => {
+        const ingredientList = ingredients.split(',').map(i => i.trim()).filter(Boolean);
+        if (ingredientList.length === 0) {
+            setAiError('Please enter at least one ingredient.');
+            return;
+        }
+        setAiLoading(true);
+        setAiError('');
+        setAiSuggestions([]);
+        try {
+            const res = await axios.post(`${API_URL}/api/ai/suggest-dishes`, {
+                ingredients: ingredientList,
+                mealType,
+                messType,
+            });
+            setAiSuggestions(res.data.dishes || []);
+        } catch (err: any) {
+            setAiError(err.response?.data?.error || 'Failed to get AI suggestions. Please try again.');
+        } finally {
+            setAiLoading(false);
+        }
+    };
+
+    const handleAddAiDish = async (dish: AISuggestion) => {
+        setAddingAiItem(dish.name);
+        try {
+            const { error } = await supabase.from('menu_items').insert({
+                session_id: session.id,
+                date_served: date,
+                meal_type: mealType,
+                mess_type: messType,
+                name: dish.name,
+                description: dish.description,
+                approval_status: 'pending',
+            });
+            if (error) throw error;
+            fetchItems();
+        } catch (err) {
+            console.error('Error adding AI dish:', err);
+            alert('Failed to add dish');
+        } finally {
+            setAddingAiItem(null);
         }
     };
 
@@ -174,6 +246,12 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
         return acc;
     }, {} as Record<string, Record<string, any[]>>);
 
+    const getApprovalBadge = (status: string) => {
+        if (status === 'approved') return <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">✓ Approved</span>;
+        if (status === 'rejected') return <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full font-medium">✗ Rejected</span>;
+        return <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">🕐 Pending</span>;
+    };
+
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
             <div className="bg-white w-full max-w-4xl h-full shadow-xl flex flex-col animate-slide-in-right">
@@ -181,7 +259,7 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                 <div className="p-6 border-b flex justify-between items-center bg-gray-50">
                     <div>
                         <h3 className="text-xl font-bold text-gray-800">Manage Menu Items</h3>
-                        <p className="text-sm text-gray-500">{session.title}</p>
+                        <p className="text-sm text-gray-500">{session.title} • Items need Admin approval before students can vote</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
                         <X size={24} />
@@ -189,134 +267,196 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                 </div>
 
                 <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                    {/* Add Item Form - Left Side */}
-                    <div className="w-full md:w-1/3 p-6 border-r overflow-y-auto bg-gray-50/50">
-                        <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                            <Plus size={18} className="text-primary" />
-                            Add New Item
-                        </h4>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
-                                <select
-                                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
-                                    value={date}
-                                    onChange={(e) => setDate(e.target.value)}
-                                >
-                                    {(() => {
-                                        // Generate 7 days starting from start_date
-                                        const dates = Array.from({ length: 7 }, (_, i) => {
-                                            const d = new Date(session.start_date);
-                                            d.setDate(d.getDate() + i);
-                                            return d;
-                                        });
+                    {/* Left: Add Item Form + AI Suggester */}
+                    <div className="w-full md:w-2/5 p-6 border-r overflow-y-auto bg-gray-50/50 space-y-5">
 
-                                        return dates.map(d => {
-                                            const val = d.toISOString().split('T')[0];
-                                            return (
-                                                <option key={val} value={val}>
-                                                    {d.toLocaleDateString('en-US', { weekday: 'long' })}
-                                                </option>
-                                            )
-                                        });
-                                    })()}
-                                </select>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Meal</label>
-                                    <select
-                                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
-                                        value={mealType}
-                                        onChange={(e) => setMealType(e.target.value)}
-                                    >
-                                        <option value="breakfast">Breakfast</option>
-                                        <option value="lunch">Lunch</option>
-                                        <option value="snacks">Snacks</option>
-                                        <option value="dinner">Dinner</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Type</label>
-                                    <select
-                                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
-                                        value={messType}
-                                        onChange={(e) => setMessType(e.target.value)}
-                                    >
-                                        <option value="veg">Veg</option>
-                                        <option value="non_veg">Non-Veg</option>
-                                        <option value="special">Special</option>
-                                        <option value="food_park">Food Park</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Item Name</label>
-                                <input
-                                    type="text"
-                                    required
-                                    placeholder="e.g. Masala Dosa"
-                                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
-                                <textarea
-                                    placeholder="Ingredients, sides..."
-                                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
-                                    rows={3}
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                />
-                            </div>
-
+                        {/* AI SUGGESTER PANEL */}
+                        <div className="border-2 border-indigo-200 rounded-xl overflow-hidden">
                             <button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full bg-primary text-white py-2.5 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-semibold shadow-lg shadow-indigo-100"
+                                onClick={() => setShowAI(!showAI)}
+                                className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 font-semibold hover:from-indigo-100 hover:to-purple-100 transition-colors"
                             >
-                                {loading ? 'Adding...' : 'Add Item'}
+                                <span className="flex items-center gap-2">
+                                    <Sparkles size={18} className="text-indigo-500" />
+                                    🤖 AI Dish Suggester
+                                </span>
+                                <span className="text-indigo-400 text-sm">{showAI ? '▲' : '▼'}</span>
                             </button>
-                        </form>
+                            {showAI && (
+                                <div className="p-4 space-y-3 bg-white">
+                                    <p className="text-xs text-gray-500">Enter your available raw materials (comma-separated) and Gemini AI will suggest bulk dishes.</p>
+                                    <textarea
+                                        value={ingredients}
+                                        onChange={e => setIngredients(e.target.value)}
+                                        placeholder="e.g. potatoes, onions, tomatoes, rice, lentils, paneer..."
+                                        rows={3}
+                                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-300 outline-none resize-none"
+                                    />
+                                    <div className="flex gap-2 text-xs text-gray-500">
+                                        <span>For: <strong className="capitalize">{mealType}</strong></span>
+                                        <span>•</span>
+                                        <span>Mess: <strong className="capitalize">{messType.replace('_', ' ')}</strong></span>
+                                    </div>
+                                    <button
+                                        onClick={handleAISuggest}
+                                        disabled={aiLoading}
+                                        className="w-full py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60 flex justify-center items-center gap-2"
+                                    >
+                                        {aiLoading ? <><Loader2 size={16} className="animate-spin" /> Generating...</> : <><Sparkles size={16} /> Get AI Suggestions</>}
+                                    </button>
+                                    {aiError && <p className="text-xs text-red-500">{aiError}</p>}
+                                    {aiSuggestions.length > 0 && (
+                                        <div className="space-y-2 mt-1">
+                                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">AI Suggestions — click ➕ to add</p>
+                                            {aiSuggestions.map((dish, idx) => (
+                                                <div key={idx} className="flex items-start justify-between gap-2 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold text-gray-900 text-sm">{dish.name}</p>
+                                                        <p className="text-xs text-gray-500 mt-0.5">{dish.description}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleAddAiDish(dish)}
+                                                        disabled={addingAiItem === dish.name}
+                                                        className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex-shrink-0 transition-colors"
+                                                        title="Add this dish"
+                                                    >
+                                                        {addingAiItem === dish.name ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* MANUAL FORM */}
+                        <div>
+                            <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <Plus size={18} className="text-primary" />
+                                Add Item Manually
+                            </h4>
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
+                                    <select
+                                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                        value={date}
+                                        onChange={(e) => setDate(e.target.value)}
+                                    >
+                                        {(() => {
+                                            const dates = Array.from({ length: 7 }, (_, i) => {
+                                                const d = new Date(session.start_date);
+                                                d.setDate(d.getDate() + i);
+                                                return d;
+                                            });
+                                            return dates.map(d => {
+                                                const val = d.toISOString().split('T')[0];
+                                                return (
+                                                    <option key={val} value={val}>
+                                                        {d.toLocaleDateString('en-US', { weekday: 'long' })}
+                                                    </option>
+                                                );
+                                            });
+                                        })()}
+                                    </select>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Meal</label>
+                                        <select
+                                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                            value={mealType}
+                                            onChange={(e) => setMealType(e.target.value)}
+                                        >
+                                            <option value="breakfast">Breakfast</option>
+                                            <option value="lunch">Lunch</option>
+                                            <option value="snacks">Snacks</option>
+                                            <option value="dinner">Dinner</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Type</label>
+                                        <select
+                                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                            value={messType}
+                                            onChange={(e) => setMessType(e.target.value)}
+                                        >
+                                            <option value="veg">Veg</option>
+                                            <option value="non_veg">Non-Veg</option>
+                                            <option value="special">Special</option>
+                                            <option value="food_park">Food Park</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Item Name</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        placeholder="e.g. Masala Dosa"
+                                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
+                                    <textarea
+                                        placeholder="Ingredients, sides..."
+                                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                        rows={2}
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                    />
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-full bg-primary text-white py-2.5 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-semibold shadow-lg shadow-indigo-100"
+                                >
+                                    {loading ? 'Adding...' : 'Add Item'}
+                                </button>
+                            </form>
+                        </div>
                     </div>
 
-                    {/* Items List - Right Side */}
+                    {/* Right: Items List */}
                     <div className="flex-1 p-6 overflow-y-auto bg-white">
                         <div className="flex flex-col gap-2 mb-6">
                             <div className="flex justify-between items-center">
                                 <h4 className="font-bold text-gray-800">Current Menu Items</h4>
-                                <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">{items.length} items total</span>
+                                <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">{items.length} items</span>
                             </div>
-                            <div className="flex gap-4 text-xs font-medium">
-                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div> Veg</span>
-                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-500"></div> Non-Veg</span>
-                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-purple-500"></div> Special</span>
-                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-teal-500"></div> Food Park</span>
+                            <div className="flex gap-3 flex-wrap text-xs font-medium">
+                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div>Veg</span>
+                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-500"></div>Non-Veg</span>
+                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-purple-500"></div>Special</span>
+                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-teal-500"></div>Food Park</span>
+                                <span className="ml-auto text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">Items need Admin approval to appear in voting</span>
                             </div>
                         </div>
 
                         {items.length === 0 ? (
                             <div className="text-center py-20 text-gray-400">
                                 <Plus size={48} className="mx-auto mb-4 opacity-20" />
-                                <p>No items added yet. Start adding from the left panel.</p>
+                                <p>No items added yet. Use the AI Suggester or add manually.</p>
                             </div>
                         ) : (
                             <div className="space-y-8">
                                 {Object.entries(groupedItems).sort().map(([dateStr, meals]: [string, any]) => (
                                     <div key={dateStr} className="border rounded-xl overflow-hidden">
-                                        <div className="bg-gray-50 px-4 py-3 border-b font-bold text-gray-700 flex justify-between">
+                                        <div className="bg-gray-50 px-4 py-3 border-b font-bold text-gray-700">
                                             {new Date(dateStr).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
                                         </div>
                                         <div className="divide-y">
                                             {['breakfast', 'lunch', 'snacks', 'dinner'].map(meal => {
                                                 const mealItems = meals[meal] || [];
                                                 if (mealItems.length === 0) return null;
-
                                                 return (
                                                     <div key={meal} className="p-4 flex gap-4">
                                                         <div className="w-24 flex-shrink-0">
@@ -325,15 +465,13 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                                                         <div className="flex-1 space-y-3">
                                                             {mealItems.map((item: any) => (
                                                                 <div key={item.id} className="flex justify-between items-start group">
-                                                                    <div>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className={`w-2 h-2 rounded-full ${item.mess_type === 'veg' ? 'bg-green-500' :
-                                                                                item.mess_type === 'non_veg' ? 'bg-orange-500' :
-                                                                                    item.mess_type === 'food_park' ? 'bg-teal-500' : 'bg-purple-500'
-                                                                                }`} title={item.mess_type}></span>
+                                                                    <div className="flex-1">
+                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${item.mess_type === 'veg' ? 'bg-green-500' : item.mess_type === 'non_veg' ? 'bg-orange-500' : item.mess_type === 'food_park' ? 'bg-teal-500' : 'bg-purple-500'}`}></span>
                                                                             <h5 className="font-medium text-gray-900">{item.name}</h5>
+                                                                            {getApprovalBadge(item.approval_status)}
                                                                         </div>
-                                                                        <p className="text-sm text-gray-500 pl-4">{item.description}</p>
+                                                                        <p className="text-sm text-gray-500 pl-4 mt-0.5">{item.description}</p>
                                                                     </div>
                                                                     <button
                                                                         onClick={async () => {
@@ -341,7 +479,7 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                                                                             await supabase.from('menu_items').delete().eq('id', item.id);
                                                                             fetchItems();
                                                                         }}
-                                                                        className="text-gray-300 hover:text-red-500 transition-colors p-1"
+                                                                        className="text-gray-300 hover:text-red-500 transition-colors p-1 ml-2"
                                                                         title="Delete Item"
                                                                     >
                                                                         <Trash2 size={16} />
@@ -364,6 +502,165 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
     );
 };
 
+// ─────────────────────────────────────────────
+// Announcement Manager (Caterer)
+// ─────────────────────────────────────────────
+const AnnouncementManager = () => {
+    const { profile } = useAuth();
+    const [announcements, setAnnouncements] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [title, setTitle] = useState('');
+    const [body, setBody] = useState('');
+    const [messType, setMessType] = useState('veg');
+    const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (profile) fetchAnnouncements();
+    }, [profile]);
+
+    const fetchAnnouncements = async () => {
+        setLoading(true);
+        try {
+            const { data } = await supabase
+                .from('announcements')
+                .select('*')
+                .eq('caterer_id', profile.id)
+                .order('created_at', { ascending: false });
+            setAnnouncements(data || []);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCreate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!title.trim() || !body.trim()) return;
+        setSubmitting(true);
+        try {
+            const { error } = await supabase.from('announcements').insert({
+                caterer_id: profile.id,
+                title: title.trim(),
+                body: body.trim(),
+                mess_type: messType,
+            });
+            if (error) throw error;
+            setTitle('');
+            setBody('');
+            fetchAnnouncements();
+        } catch (err: any) {
+            alert('Failed to post announcement: ' + err.message);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Delete this announcement?')) return;
+        await supabase.from('announcements').delete().eq('id', id);
+        fetchAnnouncements();
+    };
+
+    const messColors: Record<string, string> = {
+        veg: 'bg-green-100 text-green-700',
+        non_veg: 'bg-orange-100 text-orange-700',
+        special: 'bg-purple-100 text-purple-700',
+        food_park: 'bg-teal-100 text-teal-700',
+    };
+
+    return (
+        <div className="grid md:grid-cols-2 gap-6">
+            {/* Create Form */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2">
+                    <Bell size={20} className="text-primary" />
+                    Post New Announcement
+                </h3>
+                <p className="text-sm text-gray-500 mb-5">Students assigned to your mess will see this announcement on their dashboard.</p>
+                <form onSubmit={handleCreate} className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Type</label>
+                        <select
+                            value={messType}
+                            onChange={e => setMessType(e.target.value)}
+                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                        >
+                            <option value="veg">Veg</option>
+                            <option value="non_veg">Non-Veg</option>
+                            <option value="special">Special</option>
+                            <option value="food_park">Food Park</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Title</label>
+                        <input
+                            type="text"
+                            required
+                            value={title}
+                            onChange={e => setTitle(e.target.value)}
+                            placeholder="e.g. Special menu on Saturday"
+                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Message</label>
+                        <textarea
+                            required
+                            value={body}
+                            onChange={e => setBody(e.target.value)}
+                            placeholder="Write your announcement here..."
+                            rows={4}
+                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none resize-none"
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={submitting}
+                        className="w-full bg-primary text-white py-2.5 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+                    >
+                        {submitting ? 'Posting...' : '📢 Post Announcement'}
+                    </button>
+                </form>
+            </div>
+
+            {/* Announcements List */}
+            <div className="space-y-4">
+                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide">Your Announcements</h3>
+                {loading ? (
+                    <div className="text-center py-10 text-gray-400">Loading...</div>
+                ) : announcements.length === 0 ? (
+                    <div className="text-center py-12 bg-white rounded-xl border border-gray-100 text-gray-400">
+                        <Megaphone size={40} className="mx-auto mb-3 opacity-30" />
+                        <p>No announcements yet. Post your first one!</p>
+                    </div>
+                ) : (
+                    announcements.map(ann => (
+                        <div key={ann.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                            <div className="flex justify-between items-start mb-2">
+                                <div>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize mb-1 inline-block ${messColors[ann.mess_type] || 'bg-gray-100 text-gray-700'}`}>
+                                        {ann.mess_type.replace('_', ' ')}
+                                    </span>
+                                    <h4 className="font-bold text-gray-900">{ann.title}</h4>
+                                </div>
+                                <button onClick={() => handleDelete(ann.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1">
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
+                            <p className="text-gray-600 text-sm">{ann.body}</p>
+                            <p className="text-xs text-gray-400 mt-3">{new Date(ann.created_at).toLocaleDateString()}</p>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    );
+};
+
+// ─────────────────────────────────────────────
+// Feedback Manager (unchanged logic)
+// ─────────────────────────────────────────────
 const FeedbackManager = () => {
     const { profile } = useAuth();
     const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
@@ -383,7 +680,6 @@ const FeedbackManager = () => {
                 .select('*, student:profiles!student_id(full_name, reg_number)')
                 .eq('caterer_id', profile.id)
                 .order('created_at', { ascending: false });
-
             setFeedbacks(data as Feedback[] || []);
         } catch (error) {
             console.error('Error fetching feedbacks:', error);
@@ -395,21 +691,14 @@ const FeedbackManager = () => {
     const handleResponse = async (feedbackId: string) => {
         const responseText = responseInput[feedbackId];
         if (!responseText?.trim()) return;
-
         setSubmitting(feedbackId);
         try {
-            const { error } = await supabase
-                .from('feedbacks')
-                .update({ response: responseText })
-                .eq('id', feedbackId);
-
+            const { error } = await supabase.from('feedbacks').update({ response: responseText }).eq('id', feedbackId);
             if (error) throw error;
-
             alert('Response sent!');
             setResponseInput(prev => ({ ...prev, [feedbackId]: '' }));
             fetchFeedbacks();
         } catch (error) {
-            console.error('Error responding:', error);
             alert('Failed to send response');
         } finally {
             setSubmitting(null);
@@ -417,7 +706,6 @@ const FeedbackManager = () => {
     };
 
     if (loading) return <div>Loading feedbacks...</div>;
-
     if (feedbacks.length === 0) return (
         <div className="text-center py-20 bg-white rounded-xl border border-gray-100">
             <MessageSquare size={48} className="mx-auto text-gray-300 mb-3" />
@@ -441,15 +729,11 @@ const FeedbackManager = () => {
                         </div>
                         <span className="text-xs text-gray-400">{new Date(fb.created_at).toLocaleDateString()}</span>
                     </div>
-
-                    <div className="ml-13 pl-13 mb-4">
-                        <p className="text-gray-700 bg-gray-50 p-4 rounded-lg rounded-tl-none border border-gray-100">
-                            {fb.message}
-                        </p>
+                    <div className="mb-4">
+                        <p className="text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-100">{fb.message}</p>
                     </div>
-
                     {fb.response ? (
-                        <div className="ml-10 bg-green-50 p-4 rounded-lg border border-green-100 flex gap-3">
+                        <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex gap-3">
                             <Check className="text-green-600 mt-0.5" size={18} />
                             <div>
                                 <p className="text-xs font-bold text-green-700 uppercase mb-1">Your Response</p>
@@ -457,23 +741,21 @@ const FeedbackManager = () => {
                             </div>
                         </div>
                     ) : (
-                        <div className="ml-10">
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    placeholder="Type your response..."
-                                    className="flex-1 border rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary/20 outline-none"
-                                    value={responseInput[fb.id] || ''}
-                                    onChange={e => setResponseInput({ ...responseInput, [fb.id]: e.target.value })}
-                                />
-                                <button
-                                    onClick={() => handleResponse(fb.id)}
-                                    disabled={submitting === fb.id || !responseInput[fb.id]}
-                                    className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-medium"
-                                >
-                                    {submitting === fb.id ? 'Sending...' : 'Reply'}
-                                </button>
-                            </div>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                placeholder="Type your response..."
+                                className="flex-1 border rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary/20 outline-none"
+                                value={responseInput[fb.id] || ''}
+                                onChange={e => setResponseInput({ ...responseInput, [fb.id]: e.target.value })}
+                            />
+                            <button
+                                onClick={() => handleResponse(fb.id)}
+                                disabled={submitting === fb.id || !responseInput[fb.id]}
+                                className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-medium"
+                            >
+                                {submitting === fb.id ? 'Sending...' : 'Reply'}
+                            </button>
                         </div>
                     )}
                 </div>
@@ -482,6 +764,9 @@ const FeedbackManager = () => {
     );
 };
 
+// ─────────────────────────────────────────────
+// Caterer Profile Settings (unchanged)
+// ─────────────────────────────────────────────
 const CatererProfileSettings = ({ onClose }: { onClose: () => void }) => {
     const { profile } = useAuth();
     const [servedTypes, setServedTypes] = useState<string[]>([]);
@@ -502,17 +787,11 @@ const CatererProfileSettings = ({ onClose }: { onClose: () => void }) => {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const { error } = await supabase
-                .from('profiles')
-                .update({ served_mess_types: servedTypes })
-                .eq('id', profile?.id);
-
+            const { error } = await supabase.from('profiles').update({ served_mess_types: servedTypes }).eq('id', profile?.id);
             if (error) throw error;
             alert('Profile updated successfully!');
-            // Reload to reflect changes globally if needed, or rely on just the DB update
             window.location.reload();
         } catch (error: any) {
-            console.error('Error updating profile:', error);
             alert('Failed to update: ' + error.message);
         } finally {
             setSaving(false);
@@ -547,7 +826,7 @@ const CatererProfileSettings = ({ onClose }: { onClose: () => void }) => {
                         ))}
                     </div>
                 </div>
-                <div className="p-6 border-t bg-gray-50 rounded-b-xl flex justify-end gap-3 transition-all">
+                <div className="p-6 border-t bg-gray-50 rounded-b-xl flex justify-end gap-3">
                     <button onClick={onClose} className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-medium">Cancel</button>
                     <button
                         onClick={handleSave}

@@ -19,16 +19,20 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const sessionRoutes = require('./routes/sessions');
 const menuRoutes = require('./routes/menu');
 const voteRoutes = require('./routes/votes');
+const announcementRoutes = require('./routes/announcements');
+const aiRoutes = require('./routes/ai');
 
 // Base route
 app.get('/', (req, res) => {
   res.json({
     message: 'Hostel Menu Selection API',
-    version: '1.0.0',
+    version: '2.0.0',
     endpoints: {
       sessions: '/api/sessions',
       menu: '/api/menu',
-      votes: '/api/votes'
+      votes: '/api/votes',
+      announcements: '/api/announcements',
+      ai: '/api/ai'
     }
   });
 });
@@ -37,6 +41,8 @@ app.get('/', (req, res) => {
 app.use('/api/sessions', sessionRoutes(supabase));
 app.use('/api/menu', menuRoutes(supabase));
 app.use('/api/votes', voteRoutes(supabase));
+app.use('/api/announcements', announcementRoutes(supabase));
+app.use('/api/ai', aiRoutes(supabase));
 
 // Import PDF Generator
 const { generateReport } = require('./pdfGenerator');
@@ -57,8 +63,7 @@ app.get('/api/generate-pdf/:sessionId/:messType', async (req, res) => {
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    // Fetch ALL menu items with vote counts for this session/mess
-    // We do NOT filter by is_selected in SQL, so we can calculate winners if needed
+    // Fetch ALL approved menu items with vote counts for this session/mess
     const { data: items, error } = await supabase
       .from('menu_items')
       .select(`
@@ -67,6 +72,7 @@ app.get('/api/generate-pdf/:sessionId/:messType', async (req, res) => {
       `)
       .eq('session_id', sessionId)
       .eq('mess_type', messType)
+      .eq('approval_status', 'approved')
       .order('date_served', { ascending: true })
       .order('meal_type', { ascending: true });
 
@@ -74,36 +80,30 @@ app.get('/api/generate-pdf/:sessionId/:messType', async (req, res) => {
 
     let finalItems = items || [];
 
-    // Calculate vote counts for logic usage
+    // Calculate vote counts
     finalItems = finalItems.map(item => ({
       ...item,
       vote_count: item.votes && item.votes[0] ? item.votes[0].count : 0
     }));
 
-    // Logic: If finalized, we want to show the "Winning" menu.
-    // 1. First, check if manual selections exist (is_selected = true)
-    // 2. If NO manual selections exist (fallback), pick the items with highest votes per slot
+    // Logic: If finalized, show the "Winning" menu.
     if (session.status === 'finalized') {
       const manualSelections = finalItems.filter(i => i.is_selected);
 
       if (manualSelections.length > 0) {
         finalItems = manualSelections;
       } else {
-        // Fallback: Filter for highest votes per slot (Date + MealType)
+        // Fallback: highest votes per slot
         const groups = {};
-        // Group by slot
         finalItems.forEach(item => {
           const key = `${item.date_served}_${item.meal_type}`;
           if (!groups[key]) groups[key] = [];
           groups[key].push(item);
         });
 
-        // Pick winner for each group
         const winners = [];
         Object.values(groups).forEach(groupItems => {
-          // Sort descending by votes
           groupItems.sort((a, b) => b.vote_count - a.vote_count);
-          // Take top 1 (or multiple if tie? stick to 1 for PDF clarity)
           if (groupItems.length > 0) {
             winners.push(groupItems[0]);
           }
@@ -111,7 +111,6 @@ app.get('/api/generate-pdf/:sessionId/:messType', async (req, res) => {
         finalItems = winners;
       }
     }
-    // If NOT finalized, validItems remains as 'all items', showing the full list for review (default behavior)
 
     // Set headers for PDF download
     res.setHeader('Content-Type', 'application/pdf');
