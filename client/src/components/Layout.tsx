@@ -23,6 +23,9 @@ const Layout = () => {
                         <nav className="hidden md:flex gap-4">
                             <button onClick={() => navigate('/')} className="text-gray-600 hover:text-primary font-medium">Dashboard</button>
                             <button onClick={() => navigate('/events')} className="text-gray-600 hover:text-primary font-medium">Events</button>
+                            {['student', 'admin'].includes(profile?.role || '') && (
+                                <button onClick={() => navigate('/announcements')} className="text-gray-600 hover:text-primary font-medium">Announcements</button>
+                            )}
                             {profile?.role === 'student' && (
                                 <button onClick={() => navigate('/feedback')} className="text-gray-600 hover:text-primary font-medium">Feedback</button>
                             )}

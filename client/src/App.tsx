@@ -7,6 +7,7 @@ import CatererDashboard from './pages/CatererDashboard.tsx';
 import AdminDashboard from './pages/AdminDashboard.tsx';
 import EventsPage from './pages/EventsPage.tsx';
 import FeedbackPage from './pages/FeedbackPage.tsx';
+import AnnouncementsPage from './pages/AnnouncementsPage.tsx';
 import Layout from './components/Layout.tsx';
 import type { JSX } from 'react';
 
@@ -40,6 +41,12 @@ function App() {
             <Route path="events" element={
               <PrivateRoute allowedRoles={['student', 'admin', 'caterer']}>
                 <EventsPage />
+              </PrivateRoute>
+            } />
+
+            <Route path="announcements" element={
+              <PrivateRoute allowedRoles={['student', 'admin']}>
+                <AnnouncementsPage />
               </PrivateRoute>
             } />
 

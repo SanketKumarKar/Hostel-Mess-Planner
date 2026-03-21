@@ -635,10 +635,27 @@ const CatererManager = () => {
     }, []);
 
     const deleteCaterer = async (id: string, name: string) => {
-        if (!confirm(`Remove caterer "${name}"?`)) return;
-        const { error } = await supabase.from('profiles').delete().eq('id', id);
-        if (error) alert('Failed: ' + error.message);
-        else setCaterers(prev => prev.filter(c => c.id !== id));
+        if (!confirm(`Remove caterer "${name}"? This will permanently delete their announcements and feedback data, and unassign their students.`)) return;
+        
+        try {
+            // Delete related announcements
+            await supabase.from('announcements').delete().eq('caterer_id', id);
+            
+            // Delete related feedbacks
+            await supabase.from('feedbacks').delete().eq('caterer_id', id);
+            
+            // Unassign students assigned to this caterer
+            await supabase.from('profiles').update({ assigned_caterer_id: null }).eq('assigned_caterer_id', id);
+
+            // Finally, delete the caterer profile
+            const { error } = await supabase.from('profiles').delete().eq('id', id);
+            if (error) throw error;
+            
+            setCaterers(prev => prev.filter(c => c.id !== id));
+            alert('Caterer and all associated data have been permanently removed.');
+        } catch (err: any) {
+            alert('Failed to remove caterer: ' + err.message);
+        }
     };
 
     if (loading) return <div>Loading caterers...</div>;

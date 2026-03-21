@@ -345,16 +345,18 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                                         onChange={(e) => setDate(e.target.value)}
                                     >
                                         {(() => {
-                                            const dates = Array.from({ length: 7 }, (_, i) => {
+                                            const dates = Array.from({ length: 14 }, (_, i) => {
                                                 const d = new Date(session.start_date);
                                                 d.setDate(d.getDate() + i);
-                                                return d;
+                                                return { date: d, index: i };
                                             });
-                                            return dates.map(d => {
+                                            return dates.map(({ date: d, index: i }) => {
                                                 const val = d.toISOString().split('T')[0];
+                                                const weekNum = Math.floor(i / 7) + 1;
+                                                const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
                                                 return (
                                                     <option key={val} value={val}>
-                                                        {d.toLocaleDateString('en-US', { weekday: 'long' })}
+                                                        {dayName}, Week {weekNum}
                                                     </option>
                                                 );
                                             });
@@ -451,7 +453,15 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                                 {Object.entries(groupedItems).sort().map(([dateStr, meals]: [string, any]) => (
                                     <div key={dateStr} className="border rounded-xl overflow-hidden">
                                         <div className="bg-gray-50 px-4 py-3 border-b font-bold text-gray-700">
-                                            {new Date(dateStr).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                                            {(() => {
+                                                const current = new Date(dateStr);
+                                                const start = new Date(session.start_date);
+                                                current.setHours(0,0,0,0);
+                                                start.setHours(0,0,0,0);
+                                                const diffDays = Math.round((current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+                                                const weekNum = Math.floor(diffDays / 7) + 1;
+                                                return `${current.toLocaleDateString('en-US', { weekday: 'long' })}, Week ${weekNum}`;
+                                            })()}
                                         </div>
                                         <div className="divide-y">
                                             {['breakfast', 'lunch', 'snacks', 'dinner'].map(meal => {
@@ -511,7 +521,7 @@ const AnnouncementManager = () => {
     const [loading, setLoading] = useState(true);
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
-    const [messType, setMessType] = useState('veg');
+    const [messType, setMessType] = useState('all');
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
@@ -563,6 +573,7 @@ const AnnouncementManager = () => {
     };
 
     const messColors: Record<string, string> = {
+        all: 'bg-blue-100 text-blue-700',
         veg: 'bg-green-100 text-green-700',
         non_veg: 'bg-orange-100 text-orange-700',
         special: 'bg-purple-100 text-purple-700',
@@ -586,6 +597,7 @@ const AnnouncementManager = () => {
                             onChange={e => setMessType(e.target.value)}
                             className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
                         >
+                            <option value="all">To All</option>
                             <option value="veg">Veg</option>
                             <option value="non_veg">Non-Veg</option>
                             <option value="special">Special</option>

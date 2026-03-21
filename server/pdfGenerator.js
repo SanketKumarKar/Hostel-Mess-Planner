@@ -26,67 +26,100 @@ const generateReport = (session, items, messType, res) => {
     if (!items || items.length === 0) {
         doc.fontSize(12).text('No menu items found for this session/mess type.', { align: 'center' });
     } else {
-        // Group items by Date
+        // Group items by Date -> Meal Type
         const groupedByDate = items.reduce((acc, item) => {
             const date = item.date_served;
-            if (!acc[date]) acc[date] = [];
-            acc[date].push(item);
+            if (!acc[date]) acc[date] = {};
+            if (!acc[date][item.meal_type]) acc[date][item.meal_type] = [];
+            // Remove description, just use the item name.
+            acc[date][item.meal_type].push(item.name);
             return acc;
         }, {});
 
+        const drawVertLines = (startY, endY) => {
+            doc.moveTo(50, startY).lineTo(50, endY).stroke();
+            doc.moveTo(140, startY).lineTo(140, endY).stroke();
+            doc.moveTo(240, startY).lineTo(240, endY).stroke();
+            doc.moveTo(345, startY).lineTo(345, endY).stroke();
+            doc.moveTo(445, startY).lineTo(445, endY).stroke();
+            doc.moveTo(550, startY).lineTo(550, endY).stroke();
+        };
+
+        let y = doc.y;
+
+        const drawTableHeader = () => {
+            doc.moveTo(50, y).lineTo(550, y).strokeColor('#aaaaaa').stroke();
+            doc.rect(50, y, 500, 25).fill('#eeeeee');
+            doc.fillColor('#000000').font('Helvetica-Bold').fontSize(10);
+            const textY = y + 8;
+            doc.text('Date', 55, textY, { width: 80, align: 'center' });
+            doc.text('Breakfast', 145, textY, { width: 90, align: 'center' });
+            doc.text('Lunch', 245, textY, { width: 95, align: 'center' });
+            doc.text('Snacks', 350, textY, { width: 90, align: 'center' });
+            doc.text('Dinner', 450, textY, { width: 95, align: 'center' });
+            
+            drawVertLines(y, y + 25);
+            y += 25;
+            doc.moveTo(50, y).lineTo(550, y).stroke();
+        };
+
+        drawTableHeader();
+
         Object.keys(groupedByDate).sort().forEach(date => {
-            // Date Header
-            const dateStr = new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            const current = new Date(date);
+            const start = new Date(session.start_date);
+            current.setHours(0,0,0,0);
+            start.setHours(0,0,0,0);
+            const diffDays = Math.round((current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+            const weekNum = Math.floor(diffDays / 7) + 1;
+            
+            const dayName = current.toLocaleDateString('en-US', { weekday: 'short' });
+            const dateStr = `${dayName}, Wk${weekNum}`;
 
-            doc.fontSize(14).font('Helvetica-Bold').text(dateStr);
-            doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor('#ccc').stroke();
-            doc.moveDown(0.5);
+            const meals = groupedByDate[date];
+            const formatMeal = (mealArr) => mealArr ? mealArr.map(m => `• ${m}`).join('\n') : '-';
+            
+            const bf = formatMeal(meals['breakfast']);
+            const lu = formatMeal(meals['lunch']);
+            const sn = formatMeal(meals['snacks']);
+            const dn = formatMeal(meals['dinner']);
 
-            // Table Header for this date
-            let y = doc.y;
-            doc.fontSize(10).font('Helvetica-Bold').fillColor('#555');
-            doc.text('MEAL', 50, y);
-            doc.text('ITEM', 130, y);
-            doc.text('DESCRIPTION', 300, y);
-            doc.text('VOTES', 500, y);
-            doc.moveDown(0.5);
-            doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor('#eee').stroke();
-            doc.moveDown(0.5);
-            doc.fillColor('black').font('Helvetica');
+            doc.font('Helvetica').fontSize(9);
+            const options = { width: 90, align: 'left' };
+            const optionsWide = { width: 95, align: 'left' };
+            const centerOptions = { width: 85, align: 'center' };
 
-            // Sort items by meal order (breakfast, lunch, snacks, dinner)
-            const mealOrder = { breakfast: 1, lunch: 2, snacks: 3, dinner: 4 };
-            const dailyItems = groupedByDate[date].sort((a, b) => (mealOrder[a.meal_type] || 99) - (mealOrder[b.meal_type] || 99));
+            // Calculate heights
+            const hDate = doc.heightOfString(dateStr, centerOptions);
+            const hBf = doc.heightOfString(bf, options);
+            const hLu = doc.heightOfString(lu, optionsWide);
+            const hSn = doc.heightOfString(sn, options);
+            const hDn = doc.heightOfString(dn, optionsWide);
 
-            dailyItems.forEach(item => {
-                const votes = item.votes && item.votes[0] ? item.votes[0].count : 0;
+            const rowHeight = Math.max(hDate, hBf, hLu, hSn, hDn) + 20;
 
-                y = doc.y;
+            if (y + rowHeight > doc.page.height - 50) {
+                doc.addPage();
+                y = 50;
+                drawTableHeader();
+            }
 
-                // Meal Type
-                doc.fontSize(10).text(item.meal_type.toUpperCase(), 50, y, { width: 70 });
+            const startY = y;
+            doc.text(dateStr, 52, y + 10, centerOptions);
+            doc.text(bf, 145, y + 10, options);
+            doc.text(lu, 245, y + 10, optionsWide);
+            doc.text(sn, 350, y + 10, options);
+            doc.text(dn, 450, y + 10, optionsWide);
 
-                // Item Name
-                doc.font('Helvetica-Bold').text(item.name, 130, y, { width: 160 });
-
-                // Votes (Right aligned in its column)
-                doc.font('Helvetica-Bold').fillColor(votes > 0 ? '#4f46e5' : '#aaa')
-                    .text(votes.toString(), 500, y, { width: 50, align: 'left' });
-                doc.fillColor('black');
-
-                // Description (Multi-line possibility)
-                doc.font('Helvetica').fontSize(9).text(item.description || '-', 300, y, { width: 190 });
-
-                doc.moveDown(1);
-            });
-
-            doc.moveDown(1.5);
+            y += rowHeight;
+            drawVertLines(startY, y);
+            doc.moveTo(50, y).lineTo(550, y).stroke();
         });
     }
 
     // Footer
-    const bottom = doc.page.height - 50;
-    doc.fontSize(10).text('Generated by Hostel Menu System', 50, bottom, { align: 'center', width: 500 });
+    const bottom = doc.page.height - 40;
+    doc.fontSize(9).fillColor('#666666').text('Generated by Hostel Menu System', 50, bottom, { align: 'center', width: 500 });
 
     doc.end();
 };

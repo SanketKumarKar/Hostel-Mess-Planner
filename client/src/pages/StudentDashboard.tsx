@@ -122,6 +122,12 @@ const StudentDashboard = () => {
         return (
             <div className="space-y-6">
                 <SessionSwitcher />
+                
+                {/* Announcements Panel - scoped to assigned caterer */}
+                {profile?.assigned_caterer_id && profile?.mess_type && (
+                    <AnnouncementsPanel catererId={profile.assigned_caterer_id} messType={profile.mess_type} />
+                )}
+
                 <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden text-center">
                     <div className="relative z-10 flex flex-col items-center">
                         <div className="bg-white/20 p-3 rounded-full mb-3 animate-pulse"><Utensils size={32} /></div>
@@ -232,7 +238,7 @@ const AnnouncementsPanel = ({ catererId, messType }: { catererId: string, messTy
             .from('announcements')
             .select('*')
             .eq('caterer_id', catererId)
-            .eq('mess_type', messType)
+            .in('mess_type', [messType, 'all'])
             .order('created_at', { ascending: false })
             .then(({ data }) => {
                 setAnnouncements(data || []);
@@ -278,19 +284,36 @@ const AnnouncementsPanel = ({ catererId, messType }: { catererId: string, messTy
 const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
     const { profile } = useAuth();
     const [messType, setMessType] = useState(profile?.mess_type || 'veg');
+    const [catererId, setCatererId] = useState(profile?.assigned_caterer_id || '');
+    const [caterers, setCaterers] = useState<any[]>([]);
     const [updating, setUpdating] = useState(false);
 
-    useEffect(() => { if (profile?.mess_type) setMessType(profile.mess_type); }, [profile]);
+    useEffect(() => { 
+        if (profile?.mess_type) setMessType(profile.mess_type); 
+        if (profile?.assigned_caterer_id) setCatererId(profile.assigned_caterer_id);
+    }, [profile]);
+
+    useEffect(() => {
+        supabase.from('profiles').select('*').eq('role', 'caterer').then(({ data }) => setCaterers(data || []));
+    }, []);
 
     const handleUpdate = async () => {
+        if (!catererId) {
+            alert("Please select a caterer.");
+            return;
+        }
         setUpdating(true);
         try {
-            if (profile?.mess_type !== messType) {
+            const preferencesChanged = profile?.mess_type !== messType || profile?.assigned_caterer_id !== catererId;
+            if (preferencesChanged) {
                 await supabase.from('votes').delete().eq('user_id', profile?.id);
             }
-            const { error } = await supabase.from('profiles').update({ mess_type: messType }).eq('id', profile?.id);
+            const { error } = await supabase.from('profiles').update({ 
+                mess_type: messType,
+                assigned_caterer_id: catererId
+            }).eq('id', profile?.id);
             if (error) throw error;
-            alert(profile?.mess_type !== messType ? 'Mess type updated! Previous votes cleared.' : 'Profile updated!');
+            alert(preferencesChanged ? 'Preferences updated! Previous votes cleared.' : 'Profile updated!');
             window.location.reload();
         } catch (error) {
             alert('Error updating profile');
@@ -302,7 +325,23 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm animate-fade-in">
-                <h3 className="text-lg font-bold mb-4">Update Mess Preference</h3>
+                <h3 className="text-lg font-bold mb-4">Update Profile Preferences</h3>
+                
+                <div className="mb-4">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Select Your Caterer</label>
+                    <select 
+                        value={catererId} 
+                        onChange={e => setCatererId(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none bg-white"
+                    >
+                        <option value="" disabled>Choose a Caterer...</option>
+                        {caterers.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.full_name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <label className="block text-sm font-bold text-gray-700 mb-2">Select Mess Type</label>
                 <div className="space-y-3 mb-6">
                     {['veg', 'non_veg', 'special', 'food_park'].map((t) => (
                         <label key={t} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
@@ -311,6 +350,7 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
                         </label>
                     ))}
                 </div>
+                
                 <div className="flex gap-3">
                     <button onClick={onClose} className="flex-1 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
                     <button onClick={handleUpdate} disabled={updating} className="flex-1 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700">
@@ -418,7 +458,15 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
             {Object.entries(groupedItems).map(([date, meals]) => (
                 <div key={date} className="animate-fade-in">
                     <h3 className="text-xl font-bold text-gray-800 mb-4 sticky top-20 bg-background/95 backdrop-blur py-2 z-10 border-b">
-                        {new Date(date).toLocaleDateString('en-US', { weekday: 'long' })}
+                        {(() => {
+                            const current = new Date(date);
+                            const start = new Date(session.start_date);
+                            current.setHours(0,0,0,0);
+                            start.setHours(0,0,0,0);
+                            const diffDays = Math.round((current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+                            const weekNum = Math.floor(diffDays / 7) + 1;
+                            return `${current.toLocaleDateString('en-US', { weekday: 'long' })}, Week ${weekNum}`;
+                        })()}
                     </h3>
                     <div className="grid gap-6">
                         {['breakfast', 'lunch', 'snacks', 'dinner'].map((mealType) => {
@@ -497,7 +545,15 @@ const FinalMenuDisplay = ({ session }: { session: Session }) => {
             {Object.entries(grouped).map(([date, meals]) => (
                 <div key={date}>
                     <h3 className="text-xl font-bold text-gray-800 mb-4 sticky top-20 bg-background/95 backdrop-blur py-2 z-10 border-b flex items-center gap-2">
-                        {new Date(date).toLocaleDateString('en-US', { weekday: 'long' })}
+                        {(() => {
+                            const current = new Date(date);
+                            const start = new Date(session.start_date);
+                            current.setHours(0,0,0,0);
+                            start.setHours(0,0,0,0);
+                            const diffDays = Math.round((current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+                            const weekNum = Math.floor(diffDays / 7) + 1;
+                            return `${current.toLocaleDateString('en-US', { weekday: 'long' })}, Week ${weekNum}`;
+                        })()}
                         <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full uppercase">Final</span>
                     </h3>
                     <div className="grid gap-6">
