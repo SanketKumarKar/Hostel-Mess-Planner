@@ -10,6 +10,7 @@ import FeedbackPage from './pages/FeedbackPage.tsx';
 import AnnouncementsPage from './pages/AnnouncementsPage.tsx';
 import Layout from './components/Layout.tsx';
 import type { JSX } from 'react';
+import { Toaster } from 'react-hot-toast';
 
 const PrivateRoute = ({ children, allowedRoles }: { children: JSX.Element, allowedRoles?: string[] }) => {
   const { user, profile, loading } = useAuth();
@@ -30,8 +31,10 @@ const PrivateRoute = ({ children, allowedRoles }: { children: JSX.Element, allow
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
+    <>
+      <Toaster position="top-right" />
+      <Router>
+        <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
 
@@ -77,6 +80,7 @@ function App() {
         </Routes>
       </AuthProvider>
     </Router>
+    </>
   );
 }
 

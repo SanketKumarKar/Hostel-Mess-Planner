@@ -4,6 +4,7 @@ import { Plus, X, Trash2, MessageSquare, Check, Settings, Sparkles, Loader2, Meg
 import { useAuth } from '../context/AuthContext';
 import type { Feedback } from '../types';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -186,7 +187,7 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
             fetchItems();
         } catch (error) {
             console.error('Error adding item:', error);
-            alert('Failed to add item');
+            toast.error('Failed to add item');
         } finally {
             setLoading(false);
         }
@@ -231,7 +232,7 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
             fetchItems();
         } catch (err) {
             console.error('Error adding AI dish:', err);
-            alert('Failed to add dish');
+            toast.error('Failed to add dish');
         } finally {
             setAddingAiItem(null);
         }
@@ -456,8 +457,8 @@ const MenuEditor = ({ session, onClose }: { session: Session, onClose: () => voi
                                             {(() => {
                                                 const current = new Date(dateStr);
                                                 const start = new Date(session.start_date);
-                                                current.setHours(0,0,0,0);
-                                                start.setHours(0,0,0,0);
+                                                current.setHours(0, 0, 0, 0);
+                                                start.setHours(0, 0, 0, 0);
                                                 const diffDays = Math.round((current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
                                                 const weekNum = Math.floor(diffDays / 7) + 1;
                                                 return `${current.toLocaleDateString('en-US', { weekday: 'long' })}, Week ${weekNum}`;
@@ -560,7 +561,7 @@ const AnnouncementManager = () => {
             setBody('');
             fetchAnnouncements();
         } catch (err: any) {
-            alert('Failed to post announcement: ' + err.message);
+            toast.error('Failed to post announcement: ' + err.message);
         } finally {
             setSubmitting(false);
         }
@@ -707,11 +708,11 @@ const FeedbackManager = () => {
         try {
             const { error } = await supabase.from('feedbacks').update({ response: responseText }).eq('id', feedbackId);
             if (error) throw error;
-            alert('Response sent!');
+            toast.success('Response sent!');
             setResponseInput(prev => ({ ...prev, [feedbackId]: '' }));
             fetchFeedbacks();
         } catch (error) {
-            alert('Failed to send response');
+            toast.error('Failed to send response');
         } finally {
             setSubmitting(null);
         }
@@ -801,10 +802,10 @@ const CatererProfileSettings = ({ onClose }: { onClose: () => void }) => {
         try {
             const { error } = await supabase.from('profiles').update({ served_mess_types: servedTypes }).eq('id', profile?.id);
             if (error) throw error;
-            alert('Profile updated successfully!');
+            toast.success('Profile updated successfully!');
             window.location.reload();
         } catch (error: any) {
-            alert('Failed to update: ' + error.message);
+            toast.error('Failed to update: ' + error.message);
         } finally {
             setSaving(false);
         }

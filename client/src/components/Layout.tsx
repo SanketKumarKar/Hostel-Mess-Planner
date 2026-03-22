@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabaseClient';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, Menu, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 // ─────────────────────────────────────────────
 // Profile Setup Modal — shown after Google OAuth
@@ -31,8 +32,8 @@ const ProfileSetupModal = ({ profile, onComplete }: { profile: any, onComplete: 
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!regNumber.trim()) { alert('Please enter your registration number.'); return; }
-        if (!catererId) { alert('Please select a caterer.'); return; }
+        if (!regNumber.trim()) { toast.error('Please enter your registration number.'); return; }
+        if (!catererId) { toast.error('Please select a caterer.'); return; }
 
         setSaving(true);
         try {
@@ -49,7 +50,7 @@ const ProfileSetupModal = ({ profile, onComplete }: { profile: any, onComplete: 
             onComplete();
             window.location.reload();
         } catch (err: any) {
-            alert('Failed to save: ' + err.message);
+            toast.error('Failed to save: ' + err.message);
         } finally {
             setSaving(false);
         }
@@ -89,11 +90,10 @@ const ProfileSetupModal = ({ profile, onComplete }: { profile: any, onComplete: 
                             {['veg', 'non_veg', 'special', 'food_park'].map((type) => (
                                 <label
                                     key={type}
-                                    className={`flex items-center justify-center p-2.5 rounded-lg border-2 cursor-pointer hover:bg-gray-50 transition-all text-sm font-medium capitalize ${
-                                        messType === type
+                                    className={`flex items-center justify-center p-2.5 rounded-lg border-2 cursor-pointer hover:bg-gray-50 transition-all text-sm font-medium capitalize ${messType === type
                                             ? 'border-primary bg-indigo-50 text-indigo-700'
                                             : 'border-gray-200 text-gray-600'
-                                    }`}
+                                        }`}
                                 >
                                     <input
                                         type="radio"
@@ -151,6 +151,7 @@ const Layout = () => {
     const { signOut, profile } = useAuth();
     const navigate = useNavigate();
     const [showSetup, setShowSetup] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // Check if the student profile is incomplete
     useEffect(() => {
@@ -165,14 +166,19 @@ const Layout = () => {
         navigate('/login');
     };
 
+    const handleNavClick = (path: string) => {
+        navigate(path);
+        setIsMobileMenuOpen(false);
+    };
+
     return (
         <div className="min-h-screen flex flex-col bg-slate-50">
-            <header className="bg-white shadow-sm sticky top-0 z-10">
+            <header className="bg-white shadow-sm sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
                     <div className="flex items-center gap-8">
                         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-                            <img src="/logo.png" alt="Hostel Mess Logo" className="h-10 w-10 object-contain" />
-                            <h1 className="text-xl font-bold text-primary">Hostel Menu</h1>
+                            <img src="/logo.png" alt="Hostel Mess Logo" className="h-8 w-8 sm:h-10 sm:w-10 object-contain" />
+                            <h1 className="text-lg sm:text-xl font-bold text-primary truncate max-w-[150px] sm:max-w-none">Hostel Menu</h1>
                         </div>
                         <nav className="hidden md:flex gap-4">
                             <button onClick={() => navigate('/')} className="text-gray-600 hover:text-primary font-medium">Dashboard</button>
@@ -185,23 +191,47 @@ const Layout = () => {
                             )}
                         </nav>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 sm:gap-4">
                         {profile && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <User size={16} />
-                                <span className="hidden sm:inline">{profile.full_name || 'User'}</span>
-                                <span className="px-2 py-0.5 bg-gray-100 rounded-full text-xs font-medium uppercase">{profile.role}</span>
+                            <div className="flex items-center gap-1 sm:gap-2 text-sm text-gray-600">
+                                <span className="hidden sm:inline bg-gray-100 p-1 rounded-full"><User size={16} /></span>
+                                <span className="max-w-[80px] sm:max-w-[150px] truncate text-xs sm:text-sm font-medium">{profile.full_name || 'User'}</span>
+                                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px] sm:text-xs font-bold uppercase tracking-wider hidden sm:inline-block">{profile.role}</span>
                             </div>
                         )}
                         <button
                             onClick={handleSignOut}
-                            className="p-2 text-gray-500 hover:text-red-600 transition-colors"
+                            className="p-1.5 sm:p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                             title="Sign Out"
                         >
-                            <LogOut size={20} />
+                            <LogOut size={18} className="sm:w-5 sm:h-5" />
+                        </button>
+
+                        {/* Mobile Menu Toggle */}
+                        <button
+                            className="md:hidden p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg ml-1"
+                            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                        >
+                            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
                         </button>
                     </div>
                 </div>
+
+                {/* Mobile Navigation Dropdown */}
+                {isMobileMenuOpen && (
+                    <div className="md:hidden border-t border-gray-100 bg-white animate-slide-down">
+                        <nav className="flex flex-col px-4 pt-2 pb-4 space-y-1 shadow-inner">
+                            <button onClick={() => handleNavClick('/')} className="text-left px-3 py-3 text-gray-700 hover:bg-indigo-50 hover:text-primary font-medium rounded-lg">Dashboard</button>
+                            <button onClick={() => handleNavClick('/events')} className="text-left px-3 py-3 text-gray-700 hover:bg-indigo-50 hover:text-primary font-medium rounded-lg">Events</button>
+                            {['student', 'admin'].includes(profile?.role || '') && (
+                                <button onClick={() => handleNavClick('/announcements')} className="text-left px-3 py-3 text-gray-700 hover:bg-indigo-50 hover:text-primary font-medium rounded-lg">Announcements</button>
+                            )}
+                            {profile?.role === 'student' && (
+                                <button onClick={() => handleNavClick('/feedback')} className="text-left px-3 py-3 text-gray-700 hover:bg-indigo-50 hover:text-primary font-medium rounded-lg">Feedback</button>
+                            )}
+                        </nav>
+                    </div>
+                )}
             </header>
             <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
                 <Outlet />

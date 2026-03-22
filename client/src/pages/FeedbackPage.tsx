@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import type { Feedback, Profile } from '../types';
 import { Send, MessageSquare, CheckCircle, Clock } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const FeedbackPage = () => {
     const { profile } = useAuth();
@@ -63,11 +64,11 @@ const FeedbackPage = () => {
 
             setMessage('');
             setSelectedCaterer('');
-            alert('Feedback submitted successfully!');
+            toast.success('Feedback submitted successfully!');
             fetchData(); // Refresh list
         } catch (error) {
             console.error('Error submitting feedback:', error);
-            alert('Failed to submit feedback.');
+            toast.error('Failed to submit feedback.');
         } finally {
             setSubmitting(false);
         }
@@ -77,11 +78,11 @@ const FeedbackPage = () => {
 
     return (
         <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
-            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-2xl p-8 text-white shadow-lg">
-                <h2 className="text-3xl font-bold mb-2 flex items-center gap-3">
-                    <MessageSquare /> Feedback Center
+            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl p-5 sm:p-8 text-white shadow-lg">
+                <h2 className="text-2xl sm:text-3xl font-bold mb-2 flex items-center gap-2 sm:gap-3">
+                    <MessageSquare className="w-6 h-6 sm:w-8 sm:h-8" /> Feedback Center
                 </h2>
-                <p className="opacity-90">Share your thoughts directly with the caterers to help improve the service.</p>
+                <p className="opacity-90 text-sm sm:text-base">Share your thoughts directly with the caterers to help improve the service.</p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-8">

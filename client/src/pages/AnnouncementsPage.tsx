@@ -60,13 +60,13 @@ const AnnouncementsPage = () => {
 
     return (
         <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
-            <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden">
                 <div className="relative z-10">
-                    <h2 className="text-3xl font-bold mb-2 flex items-center gap-3">
-                        <Megaphone size={32} />
+                    <h2 className="text-2xl sm:text-3xl font-bold mb-2 flex items-center gap-2 sm:gap-3">
+                        <Megaphone className="w-6 h-6 sm:w-8 sm:h-8" />
                         Announcements
                     </h2>
-                    <p className="opacity-90 max-w-xl">
+                    <p className="opacity-90 max-w-xl text-sm sm:text-base">
                         Stay updated with the latest news, menu changes, and special events from your mess caterer.
                     </p>
                 </div>

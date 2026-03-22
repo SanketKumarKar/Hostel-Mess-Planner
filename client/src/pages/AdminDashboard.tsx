@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { Plus, Trash, PlayCircle, StopCircle, Check, Settings, MessageSquare, Users, UserCog, UserX, Sparkles, Loader2, X, CheckCircle, XCircle } from 'lucide-react';
 import type { SystemSetting, Profile } from '../types';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -85,7 +86,7 @@ const AdminDashboard = () => {
             setWeekLabel('week1');
             fetchSessions();
         } catch (error) {
-            alert('Error creating session');
+            toast.error('Error creating session');
         }
     };
 
@@ -413,7 +414,7 @@ const PendingApprovals = ({ onApproved }: { onApproved: () => void }) => {
             fetchPending();
             onApproved();
         } catch (err) {
-            alert('Failed to approve item');
+            toast.error('Failed to approve item');
         } finally {
             setActing(null);
         }
@@ -427,7 +428,7 @@ const PendingApprovals = ({ onApproved }: { onApproved: () => void }) => {
             fetchPending();
             onApproved();
         } catch (err) {
-            alert('Failed to reject item');
+            toast.error('Failed to reject item');
         } finally {
             setActing(null);
         }
@@ -530,8 +531,8 @@ const FinalizeMenuModal = ({ session, onClose }: { session: Session, onClose: ()
                 const hasSelectionInSlot = slotItems.some(i => i.is_selected);
                 if (!hasSelectionInSlot) {
                     const max = Math.max(...slotItems.map((i: any) => i.vote_count));
-                    slotItems.forEach((i: any) => { 
-                        if (i.vote_count === max && max > 0) i.is_selected = true; 
+                    slotItems.forEach((i: any) => {
+                        if (i.vote_count === max && max > 0) i.is_selected = true;
                     });
                 }
             });
@@ -550,10 +551,10 @@ const FinalizeMenuModal = ({ session, onClose }: { session: Session, onClose: ()
                 await supabase.from('menu_items').update({ is_selected: item.is_selected }).eq('id', item.id);
             }
             await supabase.from('voting_sessions').update({ status: 'finalized' }).eq('id', session.id);
-            alert('Menu Finalized Successfully!');
+            toast.success('Menu Finalized Successfully!');
             onClose();
         } catch (error) {
-            alert('Error saving menu');
+            toast.error('Error saving menu');
         } finally {
             setSaving(false);
         }
@@ -639,25 +640,25 @@ const CatererManager = () => {
 
     const deleteCaterer = async (id: string, name: string) => {
         if (!confirm(`Remove caterer "${name}"? This will permanently delete their announcements and feedback data, and unassign their students.`)) return;
-        
+
         try {
             // Delete related announcements
             await supabase.from('announcements').delete().eq('caterer_id', id);
-            
+
             // Delete related feedbacks
             await supabase.from('feedbacks').delete().eq('caterer_id', id);
-            
+
             // Unassign students assigned to this caterer
             await supabase.from('profiles').update({ assigned_caterer_id: null }).eq('assigned_caterer_id', id);
 
             // Finally, delete the caterer profile
             const { error } = await supabase.from('profiles').delete().eq('id', id);
             if (error) throw error;
-            
+
             setCaterers(prev => prev.filter(c => c.id !== id));
-            alert('Caterer and all associated data have been permanently removed.');
+            toast.success('Caterer and all associated data have been permanently removed.');
         } catch (err: any) {
-            alert('Failed to remove caterer: ' + err.message);
+            toast.error('Failed to remove caterer: ' + err.message);
         }
     };
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Calendar, MapPin, Trash, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface Event {
     id: string;
@@ -67,7 +68,7 @@ const EventsPage = () => {
 
             fetchEvents();
         } catch (error) {
-            alert('Error creating event');
+            toast.error('Error creating event');
             console.error(error);
         }
     };
@@ -145,15 +146,15 @@ const EventsPage = () => {
                     {events.map(event => (
                         <div key={event.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all group">
                             {event.image_url ? (
-                                <div className="h-48 bg-gray-200 w-full object-cover">
+                                <div className="h-32 sm:h-48 bg-gray-200 w-full object-cover">
                                     <img src={event.image_url} alt={event.title} className="w-full h-full object-cover" />
                                 </div>
                             ) : (
-                                <div className="h-32 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white">
-                                    <Calendar size={48} className="opacity-50" />
+                                <div className="h-20 sm:h-32 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white">
+                                    <Calendar className="w-8 h-8 sm:w-12 sm:h-12 opacity-50" />
                                 </div>
                             )}
-                            <div className="p-6">
+                            <div className="p-4 sm:p-6">
                                 <h3 className="text-xl font-bold text-gray-900 mb-2">{event.title}</h3>
                                 <div className="space-y-2 text-sm text-gray-600 mb-4">
                                     <div className="flex items-center gap-2">

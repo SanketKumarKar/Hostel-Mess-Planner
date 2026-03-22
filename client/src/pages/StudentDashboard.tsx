@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { Check, Calendar, Clock, Utensils, Megaphone } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface Session {
     id: string;
@@ -122,7 +123,7 @@ const StudentDashboard = () => {
         return (
             <div className="space-y-6">
                 <SessionSwitcher />
-                
+
                 {/* Announcements Panel - scoped to assigned caterer */}
                 {profile?.assigned_caterer_id && profile?.mess_type && (
                     <AnnouncementsPanel catererId={profile.assigned_caterer_id} messType={profile.mess_type} />
@@ -169,38 +170,44 @@ const StudentDashboard = () => {
             <SessionSwitcher />
 
             {/* Header Banner */}
-            <div className="bg-gradient-to-r from-primary to-secondary rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+            <div className="bg-gradient-to-r from-primary to-secondary rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden">
                 <div className="relative z-10">
                     <div className="flex items-center gap-3 mb-1">
-                        <h2 className="text-2xl font-bold">{selectedSession.title}</h2>
+                        <h2 className="text-xl sm:text-2xl font-bold">{selectedSession.title}</h2>
                         {selectedSession.week_label && (
                             <span className={`text-xs px-3 py-1 rounded-full font-bold uppercase ${selectedSession.week_label === 'week1' ? 'bg-blue-400/30' : 'bg-violet-400/30'}`}>
                                 {selectedSession.week_label === 'week1' ? 'Week 1' : 'Week 2'}
                             </span>
                         )}
                     </div>
-                    <p className="opacity-90 flex items-center gap-2">
-                        <Calendar size={18} />
+                    <p className="opacity-90 flex items-center gap-2 mt-2">
+                        <Calendar size={18} className="shrink-0" />
                         {selectedSession.status === 'finalized'
-                            ? <span className="font-bold bg-white/20 px-2 py-0.5 rounded">Final Menu Confirmed</span>
-                            : <span>Voting Open: {new Date(selectedSession.start_date).toLocaleDateString()} - {new Date(selectedSession.end_date).toLocaleDateString()}</span>
+                            ? <span className="font-bold bg-white/20 px-2 py-0.5 rounded text-sm">Final Menu Confirmed</span>
+                            : <span className="text-sm">Voting Open: {new Date(selectedSession.start_date).toLocaleDateString()} - {new Date(selectedSession.end_date).toLocaleDateString()}</span>
                         }
                     </p>
                     {profile?.mess_type && (
-                        <div className="mt-4 flex flex-wrap items-center gap-3">
-                            <div className="bg-white/20 px-3 py-1 rounded-full text-sm font-medium backdrop-blur-sm">
-                                Your Mess: <span className="capitalize">{profile.mess_type.replace('_', ' ')}</span>
+                        <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-3">
+                            <div className="bg-white/20 px-3 py-1.5 sm:py-1 rounded-lg sm:rounded-full text-sm font-medium backdrop-blur-sm w-full sm:w-auto flex justify-between sm:justify-start items-center">
+                                <span>Your Mess: <span className="capitalize font-bold">{profile.mess_type.replace('_', ' ')}</span></span>
+                                <button onClick={() => setShowProfileEdit(true)} className="sm:hidden text-xs bg-white text-primary px-3 py-1 rounded-full font-bold hover:bg-gray-100 transition-colors">
+                                    Change
+                                </button>
                             </div>
+
                             {assignedCaterer && (
-                                <div className="bg-white/20 px-3 py-1 rounded-full text-sm font-medium backdrop-blur-sm">
-                                    Caterer: {assignedCaterer.full_name}
+                                <div className="bg-white/20 px-3 py-1.5 sm:py-1 rounded-lg sm:rounded-full text-sm font-medium backdrop-blur-sm w-full sm:w-auto">
+                                    Caterer: <span className="font-bold">{assignedCaterer.full_name}</span>
                                 </div>
                             )}
-                            <button onClick={() => setShowProfileEdit(true)} className="text-xs bg-white text-primary px-3 py-1.5 rounded-full font-bold hover:bg-gray-100 transition-colors">
-                                Change
+
+                            <button onClick={() => setShowProfileEdit(true)} className="hidden sm:block text-xs bg-white text-primary px-3 py-1.5 rounded-full font-bold hover:bg-gray-100 transition-colors shrink-0">
+                                Change Settings
                             </button>
+
                             {selectedSession.status === 'open_for_voting' && (
-                                <button onClick={() => window.location.reload()} className="text-xs bg-white/20 text-white px-3 py-1.5 rounded-full font-bold hover:bg-white/30 transition-colors flex items-center gap-1">
+                                <button onClick={() => window.location.reload()} className="w-full sm:w-auto text-sm sm:text-xs bg-white/20 text-white px-3 py-2 sm:py-1.5 rounded-lg sm:rounded-full font-bold hover:bg-white/30 transition-colors flex items-center justify-center gap-1 mt-2 sm:mt-0">
                                     ↻ Refresh Menu
                                 </button>
                             )}
@@ -252,24 +259,24 @@ const AnnouncementsPanel = ({ catererId, messType }: { catererId: string, messTy
         <div className="rounded-xl border border-amber-200 overflow-hidden shadow-sm">
             <button
                 onClick={() => setExpanded(!expanded)}
-                className="w-full flex items-center justify-between px-5 py-3 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-800 font-semibold hover:from-amber-100 hover:to-orange-100 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-2.5 sm:px-5 sm:py-3 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-800 font-semibold hover:from-amber-100 hover:to-orange-100 transition-colors"
             >
                 <span className="flex items-center gap-2">
-                    <Megaphone size={18} className="text-amber-500" />
-                    📢 Announcements from your Caterer
-                    <span className="bg-amber-400 text-white text-xs px-2 py-0.5 rounded-full font-bold">{announcements.length}</span>
+                    <Megaphone size={16} className="text-amber-500 sm:w-[18px] sm:h-[18px]" />
+                    Announcements from your Caterer
+                    <span className="bg-amber-400 text-white text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold">{announcements.length}</span>
                 </span>
-                <span className="text-amber-400">{expanded ? '▲' : '▼'}</span>
+                <span className="text-amber-400 text-sm sm:text-base">{expanded ? '▲' : '▼'}</span>
             </button>
             {expanded && (
                 <div className="divide-y divide-amber-100 bg-white">
                     {announcements.map(ann => (
-                        <div key={ann.id} className="p-5">
+                        <div key={ann.id} className="p-4 sm:p-5">
                             <div className="flex justify-between items-start mb-1">
-                                <h4 className="font-bold text-gray-900">{ann.title}</h4>
-                                <span className="text-xs text-gray-400">{new Date(ann.created_at).toLocaleDateString()}</span>
+                                <h4 className="font-bold text-gray-900 text-sm sm:text-base">{ann.title}</h4>
+                                <span className="text-[10px] sm:text-xs text-gray-400">{new Date(ann.created_at).toLocaleDateString()}</span>
                             </div>
-                            <p className="text-gray-600 text-sm">{ann.body}</p>
+                            <p className="text-gray-600 text-xs sm:text-sm">{ann.body}</p>
                         </div>
                     ))}
                 </div>
@@ -288,8 +295,8 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
     const [caterers, setCaterers] = useState<any[]>([]);
     const [updating, setUpdating] = useState(false);
 
-    useEffect(() => { 
-        if (profile?.mess_type) setMessType(profile.mess_type); 
+    useEffect(() => {
+        if (profile?.mess_type) setMessType(profile.mess_type);
         if (profile?.assigned_caterer_id) setCatererId(profile.assigned_caterer_id);
     }, [profile]);
 
@@ -309,7 +316,7 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
 
     const handleUpdate = async () => {
         if (!catererId) {
-            alert("Please select a caterer.");
+            toast.error("Please select a caterer.");
             return;
         }
         setUpdating(true);
@@ -318,16 +325,16 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
             if (preferencesChanged) {
                 await supabase.from('votes').delete().eq('user_id', profile?.id);
             }
-            const { error } = await supabase.from('profiles').update({ 
+            const { error } = await supabase.from('profiles').update({
                 mess_type: messType,
                 assigned_caterer_id: catererId || null
             }).eq('id', profile?.id);
             if (error) throw error;
-            alert(preferencesChanged ? 'Preferences updated! Previous votes cleared.' : 'Profile updated!');
+            toast.success(preferencesChanged ? 'Preferences updated! Previous votes cleared.' : 'Profile updated!');
             window.location.reload();
         } catch (error: any) {
             console.error('Profile update error:', error);
-            alert('Error updating profile: ' + (error.message || 'Please try again.'));
+            toast.error('Error updating profile: ' + (error.message || 'Please try again.'));
         } finally {
             setUpdating(false);
         }
@@ -337,7 +344,7 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm animate-fade-in">
                 <h3 className="text-lg font-bold mb-4">Update Profile Preferences</h3>
-                
+
                 <label className="block text-sm font-bold text-gray-700 mb-2">Select Mess Type</label>
                 <div className="space-y-3 mb-5">
                     {['veg', 'non_veg', 'special', 'food_park'].map((t) => (
@@ -350,8 +357,8 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
 
                 <div className="mb-6">
                     <label className="block text-sm font-bold text-gray-700 mb-2">Select Your Caterer</label>
-                    <select 
-                        value={catererId} 
+                    <select
+                        value={catererId}
                         onChange={e => setCatererId(e.target.value)}
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none bg-white"
                         disabled={caterers.length === 0}
@@ -365,7 +372,7 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
                         <p className="text-xs text-red-500 mt-1">No caterers serving {messType.replace('_', ' ')}. Contact admin.</p>
                     )}
                 </div>
-                
+
                 <div className="flex gap-3">
                     <button onClick={onClose} className="flex-1 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
                     <button onClick={handleUpdate} disabled={updating || !catererId} className="flex-1 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
@@ -427,9 +434,9 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
         } else {
             // Count current votes for this day across all meal types
             const currentDailyVotes = items.filter(i => i.date_served === targetItem.date_served && votes.has(i.id));
-            
+
             if (currentDailyVotes.length >= 8) {
-                alert("You can only vote for up to 8 items per day.");
+                toast.error("You can only vote for up to 8 items per day.");
                 return;
             }
 
@@ -437,9 +444,9 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
             newVotes.add(targetItem.id);
             setVotes(newVotes);
             const { error } = await supabase.from('votes').insert({ user_id: profile?.id, menu_item_id: targetItem.id });
-            if (error) { 
+            if (error) {
                 setVotes(previousVotes);
-                alert(error.message || "Failed to cast vote");
+                toast.error(error.message || "Failed to cast vote");
             }
         }
     };
@@ -483,8 +490,8 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
                         {(() => {
                             const current = new Date(date);
                             const start = new Date(session.start_date);
-                            current.setHours(0,0,0,0);
-                            start.setHours(0,0,0,0);
+                            current.setHours(0, 0, 0, 0);
+                            start.setHours(0, 0, 0, 0);
                             const diffDays = Math.round((current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
                             const weekNum = Math.floor(diffDays / 7) + 1;
                             return `${current.toLocaleDateString('en-US', { weekday: 'long' })}, Week ${weekNum}`;
@@ -495,16 +502,16 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
                             const options: MenuItem[] | undefined = meals[mealType];
                             if (!options?.length) return null;
                             return (
-                                <div key={mealType} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                                    <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">{mealType}</h4>
-                                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div key={mealType} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 sm:mb-4">{mealType}</h4>
+                                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                                         {options.map((item: MenuItem) => {
                                             const isVoted = votes.has(item.id);
                                             return (
                                                 <div
                                                     key={item.id}
                                                     onClick={() => handleVote(item)}
-                                                    className={`relative cursor-pointer rounded-lg border-2 p-4 transition-all group ${isVoted ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-gray-100 hover:border-gray-300 hover:shadow-md'}`}
+                                                    className={`relative cursor-pointer rounded-lg border-2 p-3 sm:p-4 transition-all group ${isVoted ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-gray-100 hover:border-gray-300 hover:shadow-md'}`}
                                                 >
                                                     <div className="flex justify-between items-start mb-2">
                                                         <h5 className="font-semibold text-gray-900">{item.name}</h5>
@@ -515,7 +522,7 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
                                                         )}
                                                     </div>
                                                     <p className="text-sm text-gray-500 line-clamp-2 mb-3">{item.description}</p>
-                                                    <button className={`w-full py-1.5 rounded text-sm font-medium transition-colors ${isVoted ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 group-hover:bg-primary group-hover:text-white'}`}>
+                                                    <button className={`w-full py-2 sm:py-1.5 rounded-lg text-sm font-medium transition-colors ${isVoted ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 group-hover:bg-primary group-hover:text-white'}`}>
                                                         {isVoted ? 'Voted' : 'Vote'}
                                                     </button>
                                                 </div>
@@ -570,8 +577,8 @@ const FinalMenuDisplay = ({ session }: { session: Session }) => {
                         {(() => {
                             const current = new Date(date);
                             const start = new Date(session.start_date);
-                            current.setHours(0,0,0,0);
-                            start.setHours(0,0,0,0);
+                            current.setHours(0, 0, 0, 0);
+                            start.setHours(0, 0, 0, 0);
                             const diffDays = Math.round((current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
                             const weekNum = Math.floor(diffDays / 7) + 1;
                             return `${current.toLocaleDateString('en-US', { weekday: 'long' })}, Week ${weekNum}`;
