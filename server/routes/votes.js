@@ -22,6 +22,29 @@ module.exports = (supabase) => {
     router.post('/', async (req, res) => {
         try {
             const { user_id, menu_item_id } = req.body;
+
+            // 1. Get the date of the item being voted on
+            const { data: itemData, error: itemError } = await supabase
+                .from('menu_items')
+                .select('date_served')
+                .eq('id', menu_item_id)
+                .single();
+
+            if (itemError) throw itemError;
+            
+            // 2. Count existing votes for this user on this same date
+            const { count, error: countError } = await supabase
+                .from('votes')
+                .select('id, menu_items!inner(date_served)', { count: 'exact', head: true })
+                .eq('user_id', user_id)
+                .eq('menu_items.date_served', itemData.date_served);
+
+            if (countError) throw countError;
+
+            if (count >= 8) {
+                return res.status(400).json({ error: 'You can only vote for up to 8 items per day.' });
+            }
+
             const { data, error } = await supabase
                 .from('votes')
                 .insert({ user_id, menu_item_id })

@@ -1,4 +1,6 @@
 const PDFDocument = require('pdfkit');
+const path = require('path');
+const fs = require('fs');
 
 const generateReport = (session, items, messType, res) => {
     const doc = new PDFDocument({ margin: 50 });
@@ -6,21 +8,51 @@ const generateReport = (session, items, messType, res) => {
     // Stream to response
     doc.pipe(res);
 
-    // -- Header --
-    doc.fontSize(20).text('Hostel Menu Selection Report', { align: 'center' });
-    doc.moveDown();
+    // -- Header with precise positioning --
+    const logoPath = path.join(__dirname, 'assets', 'vit-logo.png');
+    const logoWidth = 100;
+    let headerY = 30;
 
-    doc.fontSize(14).text(`Session: ${session.title}`, { align: 'center' });
-    doc.fontSize(12).text(
-        `(${new Date(session.start_date).toLocaleDateString()} - ${new Date(session.end_date).toLocaleDateString()})`,
-        { align: 'center' }
+    if (fs.existsSync(logoPath)) {
+        const logoX = doc.page.width - 50 - logoWidth; // Top-right corner
+        doc.image(logoPath, logoX, headerY, { width: logoWidth });
+    }
+
+    // University name
+    doc.font('Helvetica-Bold').fontSize(18).fillColor('#1a237e')
+       .text('VIT CHENNAI', 50, headerY, { align: 'center', width: 500 });
+    headerY += 24;
+
+    // Thin decorative line
+    doc.strokeColor('#1a237e').lineWidth(1.5)
+       .moveTo(200, headerY).lineTo(412, headerY).stroke();
+    headerY += 10;
+
+    // Report title
+    doc.font('Helvetica-Bold').fontSize(14).fillColor('#333333')
+       .text('Hostel Menu Selection Report', 50, headerY, { align: 'center', width: 500 });
+    headerY += 22;
+
+    // Session info
+    doc.font('Helvetica').fontSize(10).fillColor('#555555')
+       .text(`Session: ${session.title}`, 50, headerY, { align: 'center', width: 500 });
+    headerY += 16;
+    doc.text(
+        `${new Date(session.start_date).toLocaleDateString()} — ${new Date(session.end_date).toLocaleDateString()}`,
+        50, headerY, { align: 'center', width: 500 }
     );
-    doc.moveDown();
+    headerY += 22;
 
-    doc.rect(50, doc.y, 500, 30).fill('#4f46e5');
-    doc.fillColor('white').fontSize(16).text(`${messType.toUpperCase()} MESS`, 50, doc.y - 23, { align: 'center', width: 500 });
-    doc.fillColor('black');
-    doc.moveDown(2);
+    // Mess type banner
+    const bannerHeight = 28;
+    doc.rect(50, headerY, 500, bannerHeight).fill('#1a237e');
+    doc.font('Helvetica-Bold').fillColor('white').fontSize(13)
+       .text(`${messType.replace('_', ' ').toUpperCase()} MESS`, 50, headerY + 7, { align: 'center', width: 500 });
+    doc.fillColor('black').strokeColor('#aaaaaa').lineWidth(0.5);
+    headerY += bannerHeight + 14;
+
+    // Move doc cursor to after header
+    doc.y = headerY;
 
     // -- Content --
     if (!items || items.length === 0) {

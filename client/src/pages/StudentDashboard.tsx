@@ -293,9 +293,19 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
         if (profile?.assigned_caterer_id) setCatererId(profile.assigned_caterer_id);
     }, [profile]);
 
+    // Filter caterers by selected mess type
     useEffect(() => {
-        supabase.from('profiles').select('*').eq('role', 'caterer').then(({ data }) => setCaterers(data || []));
-    }, []);
+        supabase.from('profiles').select('id, full_name, served_mess_types')
+            .eq('role', 'caterer')
+            .contains('served_mess_types', [messType])
+            .then(({ data }) => {
+                setCaterers(data || []);
+                // Reset if current caterer doesn't serve new mess type
+                if (data && !data.find((c: any) => c.id === catererId)) {
+                    setCatererId('');
+                }
+            });
+    }, [messType]);
 
     const handleUpdate = async () => {
         if (!catererId) {
@@ -310,13 +320,14 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
             }
             const { error } = await supabase.from('profiles').update({ 
                 mess_type: messType,
-                assigned_caterer_id: catererId
+                assigned_caterer_id: catererId || null
             }).eq('id', profile?.id);
             if (error) throw error;
             alert(preferencesChanged ? 'Preferences updated! Previous votes cleared.' : 'Profile updated!');
             window.location.reload();
-        } catch (error) {
-            alert('Error updating profile');
+        } catch (error: any) {
+            console.error('Profile update error:', error);
+            alert('Error updating profile: ' + (error.message || 'Please try again.'));
         } finally {
             setUpdating(false);
         }
@@ -327,22 +338,8 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
             <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm animate-fade-in">
                 <h3 className="text-lg font-bold mb-4">Update Profile Preferences</h3>
                 
-                <div className="mb-4">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Select Your Caterer</label>
-                    <select 
-                        value={catererId} 
-                        onChange={e => setCatererId(e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none bg-white"
-                    >
-                        <option value="" disabled>Choose a Caterer...</option>
-                        {caterers.map(cat => (
-                            <option key={cat.id} value={cat.id}>{cat.full_name}</option>
-                        ))}
-                    </select>
-                </div>
-
                 <label className="block text-sm font-bold text-gray-700 mb-2">Select Mess Type</label>
-                <div className="space-y-3 mb-6">
+                <div className="space-y-3 mb-5">
                     {['veg', 'non_veg', 'special', 'food_park'].map((t) => (
                         <label key={t} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                             <input type="radio" name="messType" value={t} checked={messType === t} onChange={e => setMessType(e.target.value)} className="text-primary focus:ring-primary h-5 w-5" />
@@ -350,10 +347,28 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
                         </label>
                     ))}
                 </div>
+
+                <div className="mb-6">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Select Your Caterer</label>
+                    <select 
+                        value={catererId} 
+                        onChange={e => setCatererId(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none bg-white"
+                        disabled={caterers.length === 0}
+                    >
+                        <option value="" disabled>Choose a Caterer...</option>
+                        {caterers.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.full_name}</option>
+                        ))}
+                    </select>
+                    {caterers.length === 0 && (
+                        <p className="text-xs text-red-500 mt-1">No caterers serving {messType.replace('_', ' ')}. Contact admin.</p>
+                    )}
+                </div>
                 
                 <div className="flex gap-3">
                     <button onClick={onClose} className="flex-1 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-                    <button onClick={handleUpdate} disabled={updating} className="flex-1 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700">
+                    <button onClick={handleUpdate} disabled={updating || !catererId} className="flex-1 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
                         {updating ? 'Saving...' : 'Save Update'}
                     </button>
                 </div>
@@ -410,15 +425,22 @@ const VotingInterface = ({ session, onEditProfile }: { session: Session, onEditP
             const { error } = await supabase.from('votes').delete().match({ user_id: profile?.id, menu_item_id: targetItem.id });
             if (error) { setVotes(previousVotes); }
         } else {
-            const conflictingItem = items.find(i => i.date_served === targetItem.date_served && i.meal_type === targetItem.meal_type && votes.has(i.id));
-            if (conflictingItem) {
-                newVotes.delete(conflictingItem.id);
-                await supabase.from('votes').delete().match({ user_id: profile?.id, menu_item_id: conflictingItem.id });
+            // Count current votes for this day across all meal types
+            const currentDailyVotes = items.filter(i => i.date_served === targetItem.date_served && votes.has(i.id));
+            
+            if (currentDailyVotes.length >= 8) {
+                alert("You can only vote for up to 8 items per day.");
+                return;
             }
+
+            // Removed the "one vote per meal type" restriction as per the new 8-item daily limit requirement
             newVotes.add(targetItem.id);
             setVotes(newVotes);
             const { error } = await supabase.from('votes').insert({ user_id: profile?.id, menu_item_id: targetItem.id });
-            if (error) { setVotes(previousVotes); }
+            if (error) { 
+                setVotes(previousVotes);
+                alert(error.message || "Failed to cast vote");
+            }
         }
     };
 

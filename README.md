@@ -12,16 +12,22 @@ A modern, highly-scalable platform for educational institutions and hostels to m
 ## ✨ Core Features Designed for Enterprise Usage
 
 ### 📊 Multi-Role Architecture
-Secure login through Supabase Auth, dividing responsibilities with granular permission controls:
-- **Admin Dashboard**: Create menu planning sessions, approve menu items, manage caterers (including deep-cleaning unassigned or terminated caterers), and finalize community menus.
+Secure login through Supabase Auth (Email/Password + Google OAuth), dividing responsibilities with granular permission controls:
+- **Admin Dashboard**: Create menu planning sessions, approve menu items, manage caterers, and finalize community menus with **auto-pre-selection of top-voted items**.
 - **Caterer (Vendors) Dashboard**: Submit comprehensive 14-day menu plans (Breakfast, Lunch, Snacks, Dinner), target specific mess types (Veg, Non-Veg, Special, Food Park), and send targeted announcements to users.
-- **Student (End Users) Dashboard**: Flexibly select their designated caterer and mess types. Real-time voting on proposed menus and direct feedback submission keeps the community engaged.
+- **Student (End Users) Dashboard**: Flexibly select their designated caterer and mess types. Real-time voting on proposed menus (limited to **8 items per day**) and direct feedback submission keeps the community engaged.
 
 ### 📅 Advanced Menu Logistics
 - **14-day Dynamic Cycles**: Automatically structures schedules down to "Week 1" and "Week 2" loops to manage cyclical variety without manual calendar hunting.
 - **AI-Powered Menu Suggestion**: Integration with Google Gemini AI allows caterers to input available raw materials (e.g., "potatoes, paneer, spinach") and receive 5 optimized bulk dish suggestions tailored for specific meal types and mess categories.
-- **Voting Interface**: A gamified selection system to gauge item popularity before final procurement approvals. Students can only select one item per meal type per day to avoid conflicts.
-- **Automated Menu Publishing**: One-click PDF generation producing clean, commercial-grade Excel-style tabular layouts for print menus. (Day columns against Breakfast, Lunch, Snacks, Dinner).
+- **Voting Interface**: A gamified selection system to gauge item popularity before final procurement approvals. Students can vote for up to **8 items per day**, enforced on both client and server.
+- **Smart Admin Pre-selection**: When finalizing menus, items with the highest votes are automatically pre-selected per meal slot — admins can then review and override as needed.
+- **Branded PDF Reports**: One-click PDF generation producing clean, commercial-grade Excel-style tabular layouts for print menus, now featuring the **university logo** and professional header design.
+
+### 🔐 Authentication & Security
+- **Google OAuth**: One-click sign-in with Google, with automatic profile setup for first-time users.
+- **Email Confirmation**: Traditional email/password registrations require email verification before access is granted.
+- **Profile Onboarding Modal**: First-time Google users are guided through a mandatory setup flow to select their registration number, mess type, and caterer.
 
 ### 🧠 AI-Powered Operations
 - **Feedback Analysis**: Features deep AI integration to automatically summarize hundreds of student feedback strings into consumable executive reports for admins and caterers. This turns raw sentiment into actionable insights, identifying patterns in food quality, timing, and specific dish feedback.

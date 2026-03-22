@@ -47,8 +47,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 .eq('id', userId)
                 .single();
 
-            if (error) throw error;
-            setProfile(data);
+            if (error && error.code === 'PGRST116') {
+                // No profile found — create one (Google OAuth first login)
+                const { data: { user: authUser } } = await supabase.auth.getUser();
+                const fullName = authUser?.user_metadata?.full_name 
+                    || authUser?.user_metadata?.name 
+                    || authUser?.email?.split('@')[0] 
+                    || 'User';
+
+                const { data: newProfile, error: insertError } = await supabase
+                    .from('profiles')
+                    .upsert({
+                        id: userId,
+                        full_name: fullName,
+                        role: 'student',
+                        mess_type: 'veg',
+                    })
+                    .select()
+                    .single();
+
+                if (insertError) {
+                    console.error('Error creating profile:', insertError);
+                } else {
+                    setProfile(newProfile);
+                }
+            } else if (error) {
+                throw error;
+            } else {
+                setProfile(data);
+            }
         } catch (error) {
             console.error('Error fetching profile:', error);
         } finally {

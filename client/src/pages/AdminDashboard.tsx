@@ -519,19 +519,22 @@ const FinalizeMenuModal = ({ session, onClose }: { session: Session, onClose: ()
         const fetchItems = async () => {
             const { data } = await supabase.from('menu_items').select('*, votes(count)').eq('session_id', session.id).eq('approval_status', 'approved');
             const formatted = (data || []).map((i: any) => ({ ...i, vote_count: i.votes?.[0]?.count || 0, is_selected: i.is_selected === true }));
-            const hasAnySelection = formatted.some((i: any) => i.is_selected);
-            if (!hasAnySelection) {
-                const groups: Record<string, any[]> = {};
-                formatted.forEach((i: any) => {
-                    const key = `${i.date_served}-${i.meal_type}-${i.mess_type}`;
-                    if (!groups[key]) groups[key] = [];
-                    groups[key].push(i);
-                });
-                Object.values(groups).forEach((slotItems: any[]) => {
+            const groups: Record<string, any[]> = {};
+            formatted.forEach((i: any) => {
+                const key = `${i.date_served}-${i.meal_type}-${i.mess_type}`;
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(i);
+            });
+
+            Object.values(groups).forEach((slotItems: any[]) => {
+                const hasSelectionInSlot = slotItems.some(i => i.is_selected);
+                if (!hasSelectionInSlot) {
                     const max = Math.max(...slotItems.map((i: any) => i.vote_count));
-                    slotItems.forEach((i: any) => { if (i.vote_count === max && max > 0) i.is_selected = true; });
-                });
-            }
+                    slotItems.forEach((i: any) => { 
+                        if (i.vote_count === max && max > 0) i.is_selected = true; 
+                    });
+                }
+            });
             setItems(formatted);
             setLoading(false);
         };
