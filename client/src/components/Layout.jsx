@@ -9,11 +9,11 @@ import toast from 'react-hot-toast';
 // Profile Setup Modal — shown after Google OAuth
 // when required student fields are missing
 // ─────────────────────────────────────────────
-const ProfileSetupModal = ({ profile, onComplete }: { profile: any, onComplete: () => void }) => {
+const ProfileSetupModal = ({ profile, onComplete }) => {
     const [regNumber, setRegNumber] = useState('');
-    const [messType, setMessType] = useState<string>('veg');
+    const [messType, setMessType] = useState('veg');
     const [catererId, setCatererId] = useState('');
-    const [caterers, setCaterers] = useState<any[]>([]);
+    const [caterers, setCaterers] = useState([]);
     const [saving, setSaving] = useState(false);
 
     // Fetch caterers matching the selected mess type
@@ -30,7 +30,7 @@ const ProfileSetupModal = ({ profile, onComplete }: { profile: any, onComplete: 
         fetchCaterers();
     }, [messType]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         if (!regNumber.trim()) { toast.error('Please enter your registration number.'); return; }
         if (!catererId) { toast.error('Please select a caterer.'); return; }
@@ -49,7 +49,7 @@ const ProfileSetupModal = ({ profile, onComplete }: { profile: any, onComplete: 
             if (error) throw error;
             onComplete();
             window.location.reload();
-        } catch (err: any) {
+        } catch (err) {
             toast.error('Failed to save: ' + err.message);
         } finally {
             setSaving(false);
@@ -166,7 +166,7 @@ const Layout = () => {
         navigate('/login');
     };
 
-    const handleNavClick = (path: string) => {
+    const handleNavClick = (path) => {
         navigate(path);
         setIsMobileMenuOpen(false);
     };

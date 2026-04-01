@@ -13,13 +13,13 @@ const Login = () => {
     // Registration-only fields
     const [fullName, setFullName] = useState('');
     const [regNumber, setRegNumber] = useState('');
-    const [messType, setMessType] = useState<'veg' | 'non_veg' | 'special' | 'food_park'>('veg');
-    const [role, setRole] = useState<'student' | 'caterer' | 'admin'>('student');
-    const [settings, setSettings] = useState<{ caterer: boolean, admin: boolean }>({ caterer: true, admin: true });
+    const [messType, setMessType] = useState('veg');
+    const [role, setRole] = useState('student');
+    const [settings, setSettings] = useState({ caterer: true, admin: true });
 
     // New Fields
-    const [servedMessTypes, setServedMessTypes] = useState<string[]>([]);
-    const [availableCaterers, setAvailableCaterers] = useState<any[]>([]);
+    const [servedMessTypes, setServedMessTypes] = useState([]);
+    const [availableCaterers, setAvailableCaterers] = useState([]);
     const [assignedCatererId, setAssignedCatererId] = useState('');
 
     useEffect(() => {
@@ -39,8 +39,6 @@ const Login = () => {
         const fetchCaterers = async () => {
             if (role !== 'student' || !isRegister) return;
 
-            // Logic: Find caterers who have 'messType' in their served_mess_types array
-            // PostgreSQL operator for array contains is @> but Supabase uses .cs (contains)
             const { data } = await supabase
                 .from('profiles')
                 .select('id, full_name, served_mess_types')
@@ -54,7 +52,7 @@ const Login = () => {
         fetchCaterers();
     }, [messType, role, isRegister]);
 
-    const handleServedTypeChange = (type: string) => {
+    const handleServedTypeChange = (type) => {
         setServedMessTypes(prev =>
             prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
         );
@@ -75,14 +73,14 @@ const Login = () => {
                 },
             });
             if (error) throw error;
-        } catch (error: any) {
+        } catch (error) {
             toast.error(error.message || 'Google sign in failed');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleAuth = async (e: React.FormEvent) => {
+    const handleAuth = async (e) => {
         e.preventDefault();
         setLoading(true);
         try {
@@ -168,7 +166,7 @@ const Login = () => {
                 }
                 navigate('/');
             }
-        } catch (error: any) {
+        } catch (error) {
             console.error('Auth error:', error);
             const errorMessage = error.message || 'An error occurred. Please try again.';
             toast.error(errorMessage);
@@ -232,7 +230,7 @@ const Login = () => {
                                         <select
                                             className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                                             value={role}
-                                            onChange={(e) => setRole(e.target.value as 'student' | 'caterer' | 'admin')}
+                                            onChange={(e) => setRole(e.target.value)}
                                         >
                                             <option value="student">Student</option>
                                             {settings.caterer && <option value="caterer">Caterer</option>}
@@ -293,7 +291,7 @@ const Login = () => {
                                                                 name="messType"
                                                                 value={type}
                                                                 checked={messType === type}
-                                                                onChange={(e) => setMessType(e.target.value as any)}
+                                                                onChange={(e) => setMessType(e.target.value)}
                                                                 className="sr-only"
                                                             />
                                                             <span className="capitalize text-sm font-medium">{type.replace('_', ' ')}</span>

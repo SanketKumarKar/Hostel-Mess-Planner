@@ -4,22 +4,12 @@ import { useAuth } from '../context/AuthContext';
 import { Plus, Calendar, MapPin, Trash, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-interface Event {
-    id: string;
-    title: string;
-    description: string;
-    date: string;
-    location: string;
-    image_url?: string;
-}
-
 const EventsPage = () => {
     const { profile } = useAuth();
-    const [events, setEvents] = useState<Event[]>([]);
+    const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState(false);
 
-    // Form State
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [date, setDate] = useState('');
@@ -27,17 +17,11 @@ const EventsPage = () => {
 
     const isAdmin = profile?.role === 'admin';
 
-    useEffect(() => {
-        fetchEvents();
-    }, []);
+    useEffect(() => { fetchEvents(); }, []);
 
     const fetchEvents = async () => {
         try {
-            const { data, error } = await supabase
-                .from('events')
-                .select('*')
-                .order('date', { ascending: true });
-
+            const { data, error } = await supabase.from('events').select('*').order('date', { ascending: true });
             if (error) throw error;
             setEvents(data || []);
         } catch (error) {
@@ -47,25 +31,13 @@ const EventsPage = () => {
         }
     };
 
-    const handleCreate = async (e: React.FormEvent) => {
+    const handleCreate = async (e) => {
         e.preventDefault();
         try {
-            const { error } = await supabase.from('events').insert({
-                title,
-                description,
-                date,
-                location
-            });
-
+            const { error } = await supabase.from('events').insert({ title, description, date, location });
             if (error) throw error;
-
             setShowCreate(false);
-            // Reset form
-            setTitle('');
-            setDescription('');
-            setDate('');
-            setLocation('');
-
+            setTitle(''); setDescription(''); setDate(''); setLocation('');
             fetchEvents();
         } catch (error) {
             toast.error('Error creating event');
@@ -73,7 +45,7 @@ const EventsPage = () => {
         }
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (id) => {
         if (!confirm('Are you sure you want to delete this event?')) return;
         try {
             await supabase.from('events').delete().eq('id', id);
@@ -90,12 +62,8 @@ const EventsPage = () => {
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-800">Upcoming Events</h2>
                 {isAdmin && (
-                    <button
-                        onClick={() => setShowCreate(true)}
-                        className="bg-primary text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
-                    >
-                        <Plus size={18} />
-                        Add Event
+                    <button onClick={() => setShowCreate(true)} className="bg-primary text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                        <Plus size={18} /> Add Event
                     </button>
                 )}
             </div>
@@ -105,9 +73,7 @@ const EventsPage = () => {
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in">
                         <div className="p-6 border-b flex justify-between items-center">
                             <h3 className="text-lg font-bold">Create New Event</h3>
-                            <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600">
-                                <X size={24} />
-                            </button>
+                            <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
                         </div>
                         <form onSubmit={handleCreate} className="p-6 space-y-4">
                             <div>
@@ -167,13 +133,9 @@ const EventsPage = () => {
                                     </div>
                                 </div>
                                 <p className="text-gray-600 text-sm line-clamp-3 mb-4">{event.description}</p>
-
                                 {isAdmin && (
                                     <div className="pt-4 border-t flex justify-end">
-                                        <button
-                                            onClick={() => handleDelete(event.id)}
-                                            className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center gap-1"
-                                        >
+                                        <button onClick={() => handleDelete(event.id)} className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center gap-1">
                                             <Trash size={16} /> Delete
                                         </button>
                                     </div>
