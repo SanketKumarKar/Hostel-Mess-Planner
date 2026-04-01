@@ -243,7 +243,26 @@ const FinalizeMenuModal = ({ session, onClose }) => {
 
     const handleSave = async () => {
         setSaving(true);
-        try { for (const item of items) { await supabase.from('menu_items').update({ is_selected: item.is_selected }).eq('id', item.id); } await supabase.from('voting_sessions').update({ status: 'finalized' }).eq('id', session.id); toast.success('Menu Finalized Successfully!'); onClose(); } catch (error) { toast.error('Error saving menu'); } finally { setSaving(false); }
+        try { 
+            // Save all items
+            const promises = items.map(async (item) => {
+                const { error } = await supabase.from('menu_items').update({ is_selected: item.is_selected }).eq('id', item.id);
+                if (error) throw new Error(error.message);
+            });
+            await Promise.all(promises);
+
+            // Update session status
+            const { error: sessionError } = await supabase.from('voting_sessions').update({ status: 'finalized' }).eq('id', session.id);
+            if (sessionError) throw new Error(sessionError.message);
+
+            toast.success('Menu Finalized Successfully!'); 
+            onClose(); 
+        } catch (error) { 
+            console.error("Save error:", error);
+            toast.error('Error saving menu: ' + error.message); 
+        } finally { 
+            setSaving(false); 
+        }
     };
 
     const grouped = items.reduce((acc, item) => { const key = `${item.date_served} | ${item.mess_type}`; if (!acc[key]) acc[key] = []; acc[key].push(item); return acc; }, {});

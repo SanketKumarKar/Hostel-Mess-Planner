@@ -47,7 +47,12 @@ const generateReport = (session, items, messType, res) => {
     const bannerHeight = 28;
     doc.rect(50, headerY, 500, bannerHeight).fill('#1a237e');
     doc.font('Helvetica-Bold').fillColor('white').fontSize(13)
-       .text(`${messType.replace('_', ' ').toUpperCase()} MESS`, 50, headerY + 7, { align: 'center', width: 500 });
+       .text(`${messType.replace('_', ' ').toUpperCase()} MESS`, 50, headerY + 8, { align: 'center', width: 500 });
+       
+    if (session.status === 'finalized') {
+        doc.fillColor('#ffd700').fontSize(10).text('★ FINALIZED', 50, headerY + 9, { align: 'right', width: 480 });
+    }
+
     doc.fillColor('black').strokeColor('#aaaaaa').lineWidth(0.5);
     headerY += bannerHeight + 14;
 
@@ -69,6 +74,7 @@ const generateReport = (session, items, messType, res) => {
         }, {});
 
         const drawVertLines = (startY, endY) => {
+            doc.lineWidth(0.5).strokeColor('#cccccc');
             doc.moveTo(50, startY).lineTo(50, endY).stroke();
             doc.moveTo(140, startY).lineTo(140, endY).stroke();
             doc.moveTo(240, startY).lineTo(240, endY).stroke();
@@ -80,11 +86,11 @@ const generateReport = (session, items, messType, res) => {
         let y = doc.y;
 
         const drawTableHeader = () => {
-            doc.moveTo(50, y).lineTo(550, y).strokeColor('#aaaaaa').stroke();
-            doc.rect(50, y, 500, 25).fill('#eeeeee');
-            doc.fillColor('#000000').font('Helvetica-Bold').fontSize(10);
+            doc.moveTo(50, y).lineTo(550, y).strokeColor('#1a237e').lineWidth(1.5).stroke();
+            doc.rect(50, y, 500, 25).fill('#e8eaf6');
+            doc.fillColor('#1a237e').font('Helvetica-Bold').fontSize(10);
             const textY = y + 8;
-            doc.text('Date', 55, textY, { width: 80, align: 'center' });
+            doc.text('Date', 52, textY, { width: 86, align: 'center' });
             doc.text('Breakfast', 145, textY, { width: 90, align: 'center' });
             doc.text('Lunch', 245, textY, { width: 95, align: 'center' });
             doc.text('Snacks', 350, textY, { width: 90, align: 'center' });
@@ -92,11 +98,12 @@ const generateReport = (session, items, messType, res) => {
             
             drawVertLines(y, y + 25);
             y += 25;
-            doc.moveTo(50, y).lineTo(550, y).stroke();
+            doc.moveTo(50, y).lineTo(550, y).strokeColor('#1a237e').lineWidth(1.5).stroke();
         };
 
         drawTableHeader();
 
+        let isEvenRow = false;
         Object.keys(groupedByDate).sort().forEach(date => {
             const current = new Date(date);
             const start = new Date(session.start_date);
@@ -116,19 +123,19 @@ const generateReport = (session, items, messType, res) => {
             const sn = formatMeal(meals['snacks']);
             const dn = formatMeal(meals['dinner']);
 
-            doc.font('Helvetica').fontSize(9);
+            doc.font('Helvetica').fontSize(9).fillColor('#333333');
             const options = { width: 90, align: 'left' };
             const optionsWide = { width: 95, align: 'left' };
             const centerOptions = { width: 85, align: 'center' };
 
-            // Calculate heights
+            // Calculate heights with slightly more padding
             const hDate = doc.heightOfString(dateStr, centerOptions);
             const hBf = doc.heightOfString(bf, options);
             const hLu = doc.heightOfString(lu, optionsWide);
             const hSn = doc.heightOfString(sn, options);
             const hDn = doc.heightOfString(dn, optionsWide);
 
-            const rowHeight = Math.max(hDate, hBf, hLu, hSn, hDn) + 20;
+            const rowHeight = Math.max(hDate, hBf, hLu, hSn, hDn) + 24;
 
             if (y + rowHeight > doc.page.height - 50) {
                 doc.addPage();
@@ -137,20 +144,28 @@ const generateReport = (session, items, messType, res) => {
             }
 
             const startY = y;
-            doc.text(dateStr, 52, y + 10, centerOptions);
-            doc.text(bf, 145, y + 10, options);
-            doc.text(lu, 245, y + 10, optionsWide);
-            doc.text(sn, 350, y + 10, options);
-            doc.text(dn, 450, y + 10, optionsWide);
+            
+            // Zebra striping
+            if (isEvenRow) {
+                doc.rect(50, y, 500, rowHeight).fill('#f9fafb');
+            }
+            doc.fillColor('#333333'); // reset text color
+            isEvenRow = !isEvenRow;
+
+            doc.text(dateStr, 52, y + 12, centerOptions);
+            doc.text(bf, 145, y + 12, options);
+            doc.text(lu, 245, y + 12, optionsWide);
+            doc.text(sn, 350, y + 12, options);
+            doc.text(dn, 450, y + 12, optionsWide);
 
             y += rowHeight;
             drawVertLines(startY, y);
-            doc.moveTo(50, y).lineTo(550, y).stroke();
+            doc.moveTo(50, y).lineTo(550, y).lineWidth(0.5).strokeColor('#cccccc').stroke();
         });
     }
 
     // Footer
-    const bottom = doc.page.height - 40;
+    const bottom = doc.page.height - 20;
     doc.fontSize(9).fillColor('#666666').text('Generated by Hostel Menu System', 50, bottom, { align: 'center', width: 500 });
 
     doc.end();

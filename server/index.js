@@ -88,28 +88,29 @@ app.get('/api/generate-pdf/:sessionId/:messType', async (req, res) => {
 
     // Logic: If finalized, show the "Winning" menu.
     if (session.status === 'finalized') {
-      const manualSelections = finalItems.filter(i => i.is_selected);
+      const groups = {};
+      finalItems.forEach(item => {
+        const key = `${item.date_served}_${item.meal_type}`;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(item);
+      });
 
-      if (manualSelections.length > 0) {
-        finalItems = manualSelections;
-      } else {
-        // Fallback: highest votes per slot
-        const groups = {};
-        finalItems.forEach(item => {
-          const key = `${item.date_served}_${item.meal_type}`;
-          if (!groups[key]) groups[key] = [];
-          groups[key].push(item);
-        });
-
-        const winners = [];
-        Object.values(groups).forEach(groupItems => {
+      const winners = [];
+      Object.values(groups).forEach(groupItems => {
+        // Find ALL manually selected items for this slot
+        const manualSelections = groupItems.filter(i => i.is_selected === true);
+        
+        if (manualSelections.length > 0) {
+          winners.push(...manualSelections); // Push all selections to PDF
+        } else {
+          // Fallback: highest votes per slot
           groupItems.sort((a, b) => b.vote_count - a.vote_count);
           if (groupItems.length > 0) {
             winners.push(groupItems[0]);
           }
-        });
-        finalItems = winners;
-      }
+        }
+      });
+      finalItems = winners;
     }
 
     // Set headers for PDF download
