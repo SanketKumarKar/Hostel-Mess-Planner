@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { Plus, Trash, PlayCircle, StopCircle, Check, Settings, MessageSquare, Users, UserCog, UserX, Sparkles, Loader2, X, CheckCircle, XCircle } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import Papa from 'papaparse';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -11,6 +12,7 @@ const AdminDashboard = () => {
     const [showCreate, setShowCreate] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [finalizingSession, setFinalizingSession] = useState(null);
+    const [editingSession, setEditingSession] = useState(null);
     const [stats, setStats] = useState({ pendingFeedbacks: 0, totalVotes: 0, activeSessions: 0, pendingApprovals: 0 });
     const [activeTab, setActiveTab] = useState('sessions');
     const [summaryLoading, setSummaryLoading] = useState(false);
@@ -123,6 +125,7 @@ const AdminDashboard = () => {
                                             <td className="px-6 py-4"><VoteCount sessionId={session.id} /></td>
                                             <td className="px-6 py-4"><span className={`px-2 py-1 text-xs rounded-full font-medium capitalize ${session.status === 'open_for_voting' ? 'bg-green-100 text-green-800' : session.status === 'finalized' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>{session.status.replace('_', ' ')}</span></td>
                                             <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                                                {(session.status === 'draft' || session.status === 'open_for_voting') && (<button onClick={() => setEditingSession(session)} className="px-3 py-1 bg-green-100 text-green-700 border border-green-200 rounded text-xs font-bold hover:bg-green-200 transition-colors">Add Items</button>)}
                                                 {session.status === 'draft' && (<button onClick={() => updateStatus(session.id, 'open_for_voting')} title="Open Voting" className="p-2 text-green-600 hover:bg-green-50 rounded-lg"><PlayCircle size={20} /></button>)}
                                                 {session.status === 'open_for_voting' && (<button onClick={() => updateStatus(session.id, 'closed')} title="Close Voting" className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg"><StopCircle size={20} /></button>)}
                                                 {session.status === 'closed' && (<button onClick={() => setFinalizingSession(session)} className="px-3 py-1 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 flex items-center gap-1">Review & Finalize</button>)}
@@ -144,6 +147,7 @@ const AdminDashboard = () => {
             )}
 
             {finalizingSession && (<FinalizeMenuModal session={finalizingSession} onClose={() => { setFinalizingSession(null); fetchSessions(); }} />)}
+            {editingSession && (<AdminMenuEditor session={editingSession} onClose={() => { setEditingSession(null); fetchSessions(); }} />)}
             {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
             {showSummaryModal && (
@@ -380,5 +384,446 @@ const Toggle = ({ enabled, onToggle }) => (
         <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${enabled ? 'translate-x-6' : ''}`} />
     </div>
 );
+
+const AdminMenuEditor = ({ session, onClose }) => {
+    const [items, setItems] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [date, setDate] = useState(session.start_date);
+    const [mealType, setMealType] = useState('breakfast');
+    const [messType, setMessType] = useState('veg');
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+    
+    // CSV state
+    const [csvFile, setCsvFile] = useState(null);
+    const [csvParsing, setCsvParsing] = useState(false);
+    const [csvUploadedIds, setCsvUploadedIds] = useState([]);
+    const [deletedCsvItems, setDeletedCsvItems] = useState([]);
+    const [pendingRecoveryId, setPendingRecoveryId] = useState(null);
+    const [distributionMode, setDistributionMode] = useState('min-config');
+    const [minMealCounts, setMinMealCounts] = useState({ breakfast: 3, lunch: 6, snacks: 2, dinner: 6 });
+
+    const fetchItems = async () => {
+        const { data } = await supabase.from('menu_items')
+            .select('*')
+            .eq('session_id', session.id)
+            .order('date_served', { ascending: true })
+            .order('meal_type', { ascending: true });
+        setItems(data || []);
+    };
+
+    useEffect(() => { fetchItems(); }, [session.id]);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault(); setLoading(true);
+        try {
+            const { error } = await supabase.from('menu_items').insert({ 
+                session_id: session.id, date_served: date, meal_type: mealType, mess_type: messType, 
+                name, description, approval_status: 'approved'
+            });
+            if (error) throw error;
+            
+            // If using a recovered item, permanently remove it from the unallocated pool
+            if (pendingRecoveryId) {
+                setDeletedCsvItems(prev => prev.filter(i => i.id !== pendingRecoveryId));
+                setPendingRecoveryId(null);
+            }
+
+            setName(''); setDescription(''); fetchItems();
+            toast.success('Item added successfully');
+        } catch (error) { toast.error('Failed to add item'); } finally { setLoading(false); }
+    };
+
+    const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (file) setCsvFile(file);
+    };
+
+    const distributeLocally = (items, days, mode, mealCounts) => {
+        const totalDays = Number(days) > 0 ? Number(days) : 14;
+        const mealOrder = ['breakfast', 'lunch', 'snacks', 'dinner'];
+        const perDayCounts = {
+            breakfast: Number(mealCounts?.breakfast) > 0 ? Number(mealCounts.breakfast) : 3,
+            lunch: Number(mealCounts?.lunch) > 0 ? Number(mealCounts.lunch) : 6,
+            snacks: Number(mealCounts?.snacks) > 0 ? Number(mealCounts.snacks) : 2,
+            dinner: Number(mealCounts?.dinner) > 0 ? Number(mealCounts.dinner) : 6,
+        };
+
+        const buckets = {
+            breakfast: [],
+            lunch: [],
+            snacks: [],
+            dinner: [],
+            other: [],
+        };
+
+        items.forEach((item, idx) => {
+            const normalizedMeal = String(item.meal_type || '').toLowerCase().trim();
+            const entry = { ...item, __idx: idx };
+            if (buckets[normalizedMeal]) buckets[normalizedMeal].push(entry);
+            else buckets.other.push(entry);
+        });
+
+        const assignments = new Array(items.length);
+
+        if (mode === 'equal') {
+            mealOrder.forEach(meal => {
+                let dayPointer = 0;
+                while (buckets[meal].length > 0) {
+                    const nextItem = buckets[meal].shift();
+                    assignments[nextItem.__idx] = dayPointer % totalDays;
+                    dayPointer += 1;
+                }
+            });
+        } else {
+            const hasPendingMealItems = () => (
+                buckets.breakfast.length > 0 ||
+                buckets.lunch.length > 0 ||
+                buckets.snacks.length > 0 ||
+                buckets.dinner.length > 0
+            );
+
+            while (hasPendingMealItems()) {
+                for (let day = 0; day < totalDays; day += 1) {
+                    for (const meal of mealOrder) {
+                        const take = perDayCounts[meal] || 0;
+                        for (let i = 0; i < take && buckets[meal].length > 0; i += 1) {
+                            const nextItem = buckets[meal].shift();
+                            assignments[nextItem.__idx] = day;
+                        }
+                    }
+                    if (!hasPendingMealItems()) break;
+                }
+            }
+        }
+
+        buckets.other.forEach((item, idx) => {
+            assignments[item.__idx] = idx % totalDays;
+        });
+
+        return items.map((item, idx) => ({
+            ...item,
+            day_index: Number.isInteger(assignments[idx]) ? assignments[idx] : (idx % totalDays),
+        }));
+    };
+
+    const handleCsvSubmit = async () => {
+        if (!csvFile) return toast.error('Please select a CSV file');
+        setCsvParsing(true);
+
+        const mealCounts = {
+            breakfast: Number(minMealCounts.breakfast) > 0 ? Number(minMealCounts.breakfast) : 3,
+            lunch: Number(minMealCounts.lunch) > 0 ? Number(minMealCounts.lunch) : 6,
+            snacks: Number(minMealCounts.snacks) > 0 ? Number(minMealCounts.snacks) : 2,
+            dinner: Number(minMealCounts.dinner) > 0 ? Number(minMealCounts.dinner) : 6,
+        };
+
+        const splitCellItems = (value) => String(value || '')
+            .split(',')
+            .map(v => v.trim())
+            .filter(Boolean);
+        
+        Papa.parse(csvFile, {
+            header: true,
+            skipEmptyLines: true,
+            complete: async (results) => {
+                const data = results.data;
+                const rawItems = [];
+                
+                data.forEach(row => {
+                    ['Breakfast', 'Lunch', 'Snacks', 'Dinner'].forEach(mt => {
+                        const cellVal = row[mt] || row[mt.toLowerCase()];
+                        const parsedItems = splitCellItems(cellVal);
+                        parsedItems.forEach(itemName => {
+                            rawItems.push({
+                                meal_type: mt.toLowerCase(),
+                                name: itemName,
+                                description: 'Bulk Upload'
+                            });
+                        });
+                    });
+                });
+                
+                if (rawItems.length === 0) {
+                    toast.error('No items found in CSV. Check headers.');
+                    setCsvParsing(false);
+                    return;
+                }
+                
+                try {
+                    toast.loading(distributionMode === 'equal' ? 'Distributing items equally...' : 'Scheduling by minimum meal counts...', { id: 'aiToast' });
+                    let distributed = [];
+
+                    try {
+                        const res = await axios.post(`${API_URL}/api/ai/distribute-csv`, {
+                            items: rawItems,
+                            days: 14, // standard 2 weeks for this application architecture
+                            distributionMode,
+                            mealCounts,
+                        });
+                        distributed = res.data.distributed || [];
+                    } catch (apiError) {
+                        console.error('distribute-csv API unavailable, falling back to local scheduling:', apiError);
+                        distributed = distributeLocally(rawItems, 14, distributionMode, mealCounts);
+                        toast('API unavailable. Scheduled locally instead.', { id: 'aiToast', icon: '⚠️' });
+                    }
+                    
+                    // Map day_index back into proper dates
+                    const dbItems = distributed.map(it => {
+                        const d = new Date(session.start_date);
+                        d.setDate(d.getDate() + (it.day_index || 0));
+                        return {
+                            session_id: session.id,
+                            date_served: d.toISOString().split('T')[0],
+                            meal_type: it.meal_type,
+                            mess_type: messType,
+                            name: it.name,
+                            description: it.description,
+                            approval_status: 'approved'
+                        };
+                    });
+
+                    // Insert and retrieve mapping IDs
+                    const { data: insertedData, error } = await supabase.from('menu_items').insert(dbItems).select('id');
+                    if (error) throw error;
+                    
+                    if (insertedData) {
+                        setCsvUploadedIds(insertedData.map(d => d.id));
+                    }
+
+                    fetchItems();
+                    toast.success(`Successfully uploaded and scheduled ${dbItems.length} items`, { id: 'aiToast' });
+                } catch (err) {
+                    console.error(err);
+                    toast.error('Failed to distribute items via AI', { id: 'aiToast' });
+                } finally {
+                    setCsvParsing(false);
+                }
+            },
+            error: (err) => {
+                toast.error('Error parsing CSV');
+                setCsvParsing(false);
+            }
+        });
+    };
+
+    const handleDeleteItem = async (item) => {
+        if (!confirm('Delete this item?')) return;
+        await supabase.from('menu_items').delete().eq('id', item.id);
+        
+        // Push deleted bulk item into the "Unallocated Pool"
+        if (csvUploadedIds.includes(item.id)) {
+            setDeletedCsvItems(prev => [...prev, item]);
+        }
+        fetchItems();
+    };
+
+    const handleSelectRecoveredItem = (e) => {
+        const itemId = e.target.value;
+        if(!itemId) {
+            setPendingRecoveryId(null);
+            setName('');
+            setDescription('');
+            return;
+        }
+        const found = deletedCsvItems.find(i => i.id === itemId);
+        if (found) {
+            setPendingRecoveryId(found.id);
+            setName(found.name);
+            setMealType(found.meal_type);
+            setDescription(found.description);
+        }
+    };
+
+    const handleRemoveCsv = async () => {
+        if (csvUploadedIds.length > 0) {
+            if (!confirm('Warning: This will completely delete ALL items scheduled by this bulk upload from the database, and clear the unallocated memory pool. Proceed?')) return;
+            toast.loading('Deleting scheduled items...', { id: 'del-csv' });
+            await supabase.from('menu_items').delete().in('id', csvUploadedIds);
+            toast.success('Scheduled items removed', { id: 'del-csv' });
+        }
+        setCsvUploadedIds([]);
+        setDeletedCsvItems([]);
+        setPendingRecoveryId(null);
+        setCsvFile(null);
+        const fileInput = document.getElementById('csv-upload');
+        if(fileInput) fileInput.value = '';
+        fetchItems();
+    };
+
+    const groupedItems = items.reduce((acc, item) => { const d = item.date_served; if (!acc[d]) acc[d] = {}; if (!acc[d][item.meal_type]) acc[d][item.meal_type] = []; acc[d][item.meal_type].push(item); return acc; }, {});
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
+            <div className="bg-white w-full max-w-4xl h-full shadow-xl flex flex-col animate-slide-in-right overflow-hidden">
+                <div className="p-6 border-b flex justify-between items-center bg-gray-50 flex-shrink-0">
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-800">Admin Menu Editor</h3>
+                        <p className="text-sm text-gray-500">{session.title} • Items added here are auto-approved</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><X size={24} /></button>
+                </div>
+                <div className="flex-1 overflow-hidden flex flex-col md:flex-row min-h-0">
+                    <div className="w-full md:w-2/5 p-6 border-r overflow-y-auto bg-gray-50/50 space-y-6">
+                        
+                        {/* CSV Upload */}
+                        <div className="bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-5 rounded-2xl border border-indigo-100 shadow-sm relative">
+                            {csvUploadedIds.length > 0 && (
+                                <button onClick={handleRemoveCsv} className="absolute top-4 right-4 text-red-600 bg-white px-2.5 py-1.5 rounded-xl hover:bg-red-50 border border-red-200 text-xs font-bold transition-all shadow-sm flex gap-1 items-center" title="Remove CSV & Reset">
+                                    <Trash size={14} /> Remove Upload
+                                </button>
+                            )}
+                            <h4 className="font-bold text-indigo-950 mb-1 flex items-center gap-2 pr-28"><Sparkles size={18} className="text-indigo-500" />AI Bulk Allocation</h4>
+                            <p className="text-xs leading-5 text-indigo-700/90 block mb-4">Upload a CSV (Breakfast, Lunch, Snacks, Dinner headers). Choose equal distribution or minimum-per-day configuration.</p>
+                            
+                            <div className="space-y-3.5">
+                                <div>
+                                    <label className="block text-xs font-bold tracking-wide text-indigo-900 uppercase mb-1.5">Target Mess Type</label>
+                                    <select className="w-full bg-white px-3 py-2.5 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-300 outline-none text-sm" value={messType} onChange={(e) => setMessType(e.target.value)}>
+                                        <option value="veg">Veg</option><option value="non_veg">Non-Veg</option><option value="special">Special</option><option value="food_park">Food Park</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold tracking-wide text-indigo-900 uppercase mb-1.5">Distribution Mode</label>
+                                    <select
+                                        className="w-full bg-white px-3 py-2.5 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-300 outline-none text-sm"
+                                        value={distributionMode}
+                                        onChange={(e) => setDistributionMode(e.target.value)}
+                                    >
+                                        <option value="equal">Distribute Equally (round-robin by day)</option>
+                                        <option value="min-config">Minimum Per Day Configuration</option>
+                                    </select>
+                                </div>
+                                {distributionMode === 'min-config' && (
+                                    <div className="grid grid-cols-2 gap-2.5">
+                                        <div>
+                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Breakfast (min)</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={minMealCounts.breakfast}
+                                                onChange={(e) => setMinMealCounts(prev => ({ ...prev, breakfast: e.target.value }))}
+                                                className="w-full bg-white px-2.5 py-2 border border-indigo-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-indigo-200"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Lunch (min)</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={minMealCounts.lunch}
+                                                onChange={(e) => setMinMealCounts(prev => ({ ...prev, lunch: e.target.value }))}
+                                                className="w-full bg-white px-2.5 py-2 border border-indigo-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-indigo-200"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Snacks (min)</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={minMealCounts.snacks}
+                                                onChange={(e) => setMinMealCounts(prev => ({ ...prev, snacks: e.target.value }))}
+                                                className="w-full bg-white px-2.5 py-2 border border-indigo-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-indigo-200"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Dinner (min)</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={minMealCounts.dinner}
+                                                onChange={(e) => setMinMealCounts(prev => ({ ...prev, dinner: e.target.value }))}
+                                                className="w-full bg-white px-2.5 py-2 border border-indigo-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-indigo-200"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                                {distributionMode === 'min-config' && (
+                                    <p className="text-[11px] text-indigo-800 bg-indigo-100/70 border border-indigo-200 rounded-lg px-2.5 py-2">
+                                        Current minimum configuration: Lunch {minMealCounts.lunch || 6}, Breakfast {minMealCounts.breakfast || 3}, Snacks {minMealCounts.snacks || 2}, Dinner {minMealCounts.dinner || 6}.
+                                    </p>
+                                )}
+                                <input type="file" id="csv-upload" accept=".csv" onChange={handleFileUpload} className="block w-full text-xs text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700" />
+                                <button type="button" onClick={handleCsvSubmit} disabled={csvParsing || !csvFile || csvUploadedIds.length > 0} className="w-full bg-indigo-600 text-white py-2.5 px-4 rounded-xl hover:bg-indigo-700 transition-colors font-semibold disabled:bg-indigo-300 disabled:text-indigo-100 flex justify-center items-center gap-2 shadow-md">
+                                    {csvParsing ? <><Loader2 size={16} className="animate-spin" /> Scheduling...</> : 'Upload & Schedule'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Manual Form */}
+                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative">
+                            <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Plus size={18} className="text-primary" />Manual Addition</h4>
+                            
+                            {deletedCsvItems.length > 0 && (
+                                <div className="mb-4 bg-amber-50 p-3 rounded-lg border border-amber-200">
+                                    <label className="block text-xs font-bold text-amber-800 uppercase mb-1">Recover Unallocated Item</label>
+                                    <select onChange={handleSelectRecoveredItem} value={pendingRecoveryId || ''} className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm outline-none bg-white font-medium text-gray-800">
+                                        <option value="">-- Select an item to schedule --</option>
+                                        {deletedCsvItems.map(i => <option key={i.id} value={i.id}>{i.name} ({i.meal_type})</option>)}
+                                    </select>
+                                </div>
+                            )}
+
+                            <form onSubmit={handleSubmit} className="space-y-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Target Date</label>
+                                    <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none text-sm" value={date} onChange={(e) => setDate(e.target.value)}>
+                                        {Array.from({ length: 14 }, (_, i) => { const d = new Date(session.start_date); d.setDate(d.getDate() + i); return { date: d, index: i }; }).map(({ date: d, index: i }) => { const val = d.toISOString().split('T')[0]; const weekNum = Math.floor(i / 7) + 1; const dayName = d.toLocaleDateString('en-US', { weekday: 'long' }); return (<option key={val} value={val}>{dayName}, Week {weekNum}</option>); })}
+                                    </select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 mb-2">
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Meal</label><select className="w-full px-3 py-2 border rounded-lg outline-none text-sm" value={mealType} onChange={(e) => setMealType(e.target.value)}><option value="breakfast">Breakfast</option><option value="lunch">Lunch</option><option value="snacks">Snacks</option><option value="dinner">Dinner</option></select></div>
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Form</label><select className="w-full px-3 py-2 border rounded-lg outline-none text-sm" value={messType} onChange={(e) => setMessType(e.target.value)}><option value="veg">Veg</option><option value="non_veg">NVeg</option><option value="special">Spl</option><option value="food_park">Park</option></select></div>
+                                </div>
+                                <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Item Name</label><input type="text" required placeholder="e.g. Masala Dosa" className="w-full px-3 py-2 border rounded-lg outline-none text-sm" value={name} onChange={(e) => setName(e.target.value)} /></div>
+                                <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label><textarea placeholder="Ingredients, sides..." className="w-full px-3 py-2 border rounded-lg outline-none text-sm" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+                                <button type="submit" disabled={loading} className="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-semibold flex justify-center items-center gap-2 mt-2">
+                                    {loading ? <><Loader2 size={16} className="animate-spin" /> Adding...</> : 'Schedule Item'}
+                                </button>
+                            </form>
+                        </div>
+                        
+                    </div>
+                    
+                    <div className="flex-1 p-6 overflow-y-auto bg-white min-h-0">
+                        <div className="flex justify-between items-center mb-6"><h4 className="font-bold text-gray-800">Scheduled Items</h4><span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">{items.length} items</span></div>
+                        {items.length === 0 ? (<div className="text-center py-20 text-gray-400"><Plus size={48} className="mx-auto mb-4 opacity-20" /><p>No items added. Use manual or bulk allocator.</p></div>) : (
+                            <div className="space-y-6">
+                                {Object.entries(groupedItems).sort().map(([dateStr, meals]) => (
+                                    <div key={dateStr} className="border rounded-xl overflow-hidden shadow-sm">
+                                        <div className="bg-gray-50 px-4 py-3 border-b font-bold text-gray-700">{(() => { const current = new Date(dateStr); const start = new Date(session.start_date); current.setHours(0,0,0,0); start.setHours(0,0,0,0); const diffDays = Math.round((current.getTime() - start.getTime()) / (1000*60*60*24)); const weekNum = Math.floor(diffDays / 7) + 1; return `${current.toLocaleDateString('en-US', { weekday: 'long' })}, Week ${weekNum}`; })()}</div>
+                                        <div className="divide-y">
+                                            {['breakfast', 'lunch', 'snacks', 'dinner'].map(meal => { const mealItems = meals[meal] || []; if (mealItems.length === 0) return null; return (
+                                                <div key={meal} className="p-4 flex gap-4 hover:bg-gray-50/50">
+                                                    <div className="w-24 flex-shrink-0"><span className="text-xs font-bold uppercase text-gray-400 tracking-wider block pt-1">{meal}</span></div>
+                                                    <div className="flex-1 space-y-3">
+                                                        {mealItems.map((item) => (
+                                                            <div key={item.id} className="flex justify-between items-start group">
+                                                                <div className="flex-1">
+                                                                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${item.mess_type === 'veg' ? 'bg-green-500' : item.mess_type === 'non_veg' ? 'bg-orange-500' : item.mess_type === 'food_park' ? 'bg-teal-500' : 'bg-purple-500'}`}></span>
+                                                                        <h5 className="font-medium text-gray-900">{item.name}</h5>
+                                                                        {item.approval_status === 'approved' ? (<span className="text-[10px] px-1.5 bg-green-100 text-green-700 rounded uppercase font-bold">Approved</span>) : (<span className="text-[10px] px-1.5 bg-yellow-100 text-yellow-700 rounded uppercase font-bold">Pending</span>)}
+                                                                        {csvUploadedIds.includes(item.id) && <span className="text-[10px] px-1.5 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded uppercase font-bold">AI SCHEDULED</span>}
+                                                                    </div>
+                                                                    <p className="text-xs text-gray-500 pl-4">{item.description}</p>
+                                                                </div>
+                                                                <button onClick={() => handleDeleteItem(item)} className="text-gray-300 hover:text-red-500 transition-colors p-1 bg-white rounded-lg hover:shadow-sm"><Trash size={16} /></button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ); })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default AdminDashboard;

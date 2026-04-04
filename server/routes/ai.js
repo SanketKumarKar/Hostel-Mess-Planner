@@ -93,5 +93,97 @@ Be objective, professional, and actionable. Do not use bullet points - write in 
         }
     });
 
+    /**
+     * POST /api/ai/distribute-csv
+     * Body: { items: [{ name, meal_type, description }], days: 14, distributionMode?: 'equal' | 'min-config', mealCounts?: { breakfast, lunch, snacks, dinner } }
+     * Returns: distributed array mapping items to `day_index`
+     */
+    router.post('/distribute-csv', async (req, res) => {
+        try {
+            const { items, days, mealCounts, distributionMode } = req.body;
+            if (!items || !Array.isArray(items) || items.length === 0) {
+                return res.status(400).json({ error: 'items array is required' });
+            }
+
+            const totalDays = Number(days) > 0 ? Number(days) : 14;
+            const mode = distributionMode === 'equal' ? 'equal' : 'min-config';
+            const perDayCounts = {
+                breakfast: Number(mealCounts?.breakfast) > 0 ? Number(mealCounts.breakfast) : 3,
+                lunch: Number(mealCounts?.lunch) > 0 ? Number(mealCounts.lunch) : 6,
+                snacks: Number(mealCounts?.snacks) > 0 ? Number(mealCounts.snacks) : 2,
+                dinner: Number(mealCounts?.dinner) > 0 ? Number(mealCounts.dinner) : 6,
+            };
+
+            const mealOrder = ['breakfast', 'lunch', 'snacks', 'dinner'];
+            const buckets = {
+                breakfast: [],
+                lunch: [],
+                snacks: [],
+                dinner: [],
+                other: [],
+            };
+
+            items.forEach((item, idx) => {
+                const normalizedMeal = String(item.meal_type || '').toLowerCase().trim();
+                const entry = { ...item, __idx: idx };
+                if (buckets[normalizedMeal]) {
+                    buckets[normalizedMeal].push(entry);
+                } else {
+                    buckets.other.push(entry);
+                }
+            });
+
+            const assignments = new Array(items.length);
+
+            const hasPendingMealItems = () => (
+                buckets.breakfast.length > 0 ||
+                buckets.lunch.length > 0 ||
+                buckets.snacks.length > 0 ||
+                buckets.dinner.length > 0
+            );
+
+            if (mode === 'equal') {
+                for (const meal of mealOrder) {
+                    let dayPointer = 0;
+                    while (buckets[meal].length > 0) {
+                        const nextItem = buckets[meal].shift();
+                        assignments[nextItem.__idx] = dayPointer % totalDays;
+                        dayPointer += 1;
+                    }
+                }
+            } else {
+                // Fill one full day at a time in meal order, then move to the next day.
+                while (hasPendingMealItems()) {
+                    for (let day = 0; day < totalDays; day += 1) {
+                        for (const meal of mealOrder) {
+                            const take = perDayCounts[meal] || 0;
+                            for (let i = 0; i < take && buckets[meal].length > 0; i += 1) {
+                                const nextItem = buckets[meal].shift();
+                                assignments[nextItem.__idx] = day;
+                            }
+                        }
+
+                        if (!hasPendingMealItems()) break;
+                    }
+                }
+            }
+
+            // If any unknown meal types exist, place them in day order at the end.
+            buckets.other.forEach((item, idx) => {
+                assignments[item.__idx] = idx % totalDays;
+            });
+
+            const mappedItems = items.map((item, idx) => ({
+                ...item,
+                day_index: Number.isInteger(assignments[idx]) ? assignments[idx] : (idx % totalDays),
+            }));
+
+            res.json({ distributed: mappedItems });
+        } catch (error) {
+            console.error('AI distribute error:', error);
+            res.status(500).json({ error: 'Failed to distribute items using AI: ' + error.message });
+        }
+    });
+
     return router;
 };
