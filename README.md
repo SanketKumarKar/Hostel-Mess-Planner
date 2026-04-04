@@ -20,6 +20,9 @@ Secure login through Supabase Auth (Email/Password + Google OAuth), dividing res
 ### 📅 Advanced Menu Logistics
 - **14-day Dynamic Cycles**: Automatically structures schedules down to "Week 1" and "Week 2" loops to manage cyclical variety without manual calendar hunting.
 - **AI-Powered Menu Suggestion**: Integration with Google Gemini AI allows caterers to input available raw materials (e.g., "potatoes, paneer, spinach") and receive 5 optimized bulk dish suggestions tailored for specific meal types and mess categories.
+- **AI Bulk CSV Upload & Scheduling**: Admins can upload CSV files with `Breakfast`, `Lunch`, `Snacks`, and `Dinner` columns, auto-split comma-separated dish lists, and schedule them across 14 days.
+- **Dual Distribution Modes**: Choose between **Equal Distribution** (round-robin by day) or **Minimum Per Day Configuration** (day-first allocation using configurable meal counts such as Breakfast 3, Lunch 6, Snacks 2, Dinner 6).
+- **Resilient Scheduling Fallback**: If the AI distribution endpoint is unavailable, the frontend automatically uses local deterministic scheduling logic so bulk uploads still complete.
 - **Voting Interface**: A gamified selection system to gauge item popularity before final procurement approvals. Students can vote for up to **8 items per day**, enforced on both client and server.
 - **Smart Admin Pre-selection**: When finalizing menus, items with the highest votes are automatically pre-selected per meal slot — admins can then review and override as needed.
 - **Branded PDF Reports**: One-click PDF generation producing clean, commercial-grade Excel-style tabular layouts for print menus, now featuring the **university logo** and professional header design.
@@ -52,7 +55,7 @@ Secure login through Supabase Auth (Email/Password + Google OAuth), dividing res
 - **Cross-Origin Resource Sharing**: CORS middleware implemented to ensure secure client-server handshake.
 
 ### **Integrations**
-- Direct LLM integration for AI Summerization via `axios`.
+- Direct LLM integration for AI summarization via `axios`.
 
 ---
 
@@ -109,12 +112,49 @@ Creates a downloadable, print-friendly grid (Excel-style) converting the 14-day 
 ### 3. AI Feedback Summarization
 Consolidates raw student feedback into an intelligent executive summary.
 
-**Endpoint**: `POST /api/summarize-feedback`
+**Endpoint**: `POST /api/ai/summarize-feedback`
 
 - **Body (JSON)**:
   ```json
   {
       "feedbackText": "The dal was a bit salty, but I really enjoyed the paneer. Quality has been improving."
+  }
+  ```
+
+### 4. AI/Deterministic CSV Distribution
+Distributes uploaded CSV menu items over the 14-day cycle with selectable scheduling strategy.
+
+**Endpoint**: `POST /api/ai/distribute-csv`
+
+- **Body (JSON)**:
+  ```json
+  {
+    "items": [
+      { "name": "Idli", "meal_type": "breakfast", "description": "Bulk Upload" },
+      { "name": "Rice", "meal_type": "lunch", "description": "Bulk Upload" }
+    ],
+    "days": 14,
+    "distributionMode": "min-config",
+    "mealCounts": {
+      "breakfast": 3,
+      "lunch": 6,
+      "snacks": 2,
+      "dinner": 6
+    }
+  }
+  ```
+
+- **Modes**:
+  - `equal`: Round-robin distribution by day for each meal type.
+  - `min-config`: Fills one full day at a time in meal order (`breakfast -> lunch -> snacks -> dinner`) based on `mealCounts`, then moves to the next day.
+
+- **Response (JSON)**:
+  ```json
+  {
+    "distributed": [
+      { "name": "Idli", "meal_type": "breakfast", "description": "Bulk Upload", "day_index": 0 },
+      { "name": "Rice", "meal_type": "lunch", "description": "Bulk Upload", "day_index": 0 }
+    ]
   }
   ```
 - **Response (JSON)**:
