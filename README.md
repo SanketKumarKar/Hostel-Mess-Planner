@@ -14,17 +14,20 @@ A modern, highly-scalable platform for educational institutions and hostels to m
 ### 📊 Multi-Role Architecture
 Secure login through Supabase Auth (Email/Password + Google OAuth), dividing responsibilities with granular permission controls:
 - **Admin Dashboard**: Create menu planning sessions, approve menu items, manage caterers, and finalize community menus with **auto-pre-selection of top-voted items**.
-- **Caterer (Vendors) Dashboard**: Submit comprehensive 14-day menu plans (Breakfast, Lunch, Snacks, Dinner), target specific mess types (Veg, Non-Veg, Special, Food Park), and send targeted announcements to users.
+- **Caterer (Vendors) Dashboard**: Submit menu plans (Breakfast, Lunch, Snacks, Dinner) using configurable **1-week or 2-week menu cycles**, target specific mess types (Veg, Non-Veg, Special, Food Park), and send targeted announcements to users.
 - **Student (End Users) Dashboard**: Flexibly select their designated caterer and mess types. Real-time voting on proposed menus (limited to **8 items per day**) and direct feedback submission keeps the community engaged.
 
 ### 📅 Advanced Menu Logistics
-- **14-day Dynamic Cycles**: Automatically structures schedules down to "Week 1" and "Week 2" loops to manage cyclical variety without manual calendar hunting.
+- **Configurable Cycle Length**: Each session can now be created as **1-week (Mon-Sun)** or **2-week (Mon Wk1-Sun Wk2)**. This controls manual slot selection, CSV scheduling windows, and PDF labels.
+- **Slot-Based Labeling (Date-Independent)**: Day labels (e.g., Mon, Wk1 / Tue, Wk2) are now tied to menu slots, not session start/end dates, so planning labels remain stable and consistent.
 - **AI-Powered Menu Suggestion**: Integration with Google Gemini AI allows caterers to input available raw materials (e.g., "potatoes, paneer, spinach") and receive 5 optimized bulk dish suggestions tailored for specific meal types and mess categories.
-- **AI Bulk CSV Upload & Scheduling**: Admins can upload CSV files with `Breakfast`, `Lunch`, `Snacks`, and `Dinner` columns, auto-split comma-separated dish lists, and schedule them across 14 days.
+- **AI Bulk CSV Upload & Scheduling**: Admins can upload CSV files with `Breakfast`, `Lunch`, `Snacks`, and `Dinner` columns, auto-split comma-separated dish lists, and schedule them across **7 or 14 days** based on the selected session cycle.
 - **Dual Distribution Modes**: Choose between **Equal Distribution** (round-robin by day) or **Minimum Per Day Configuration** (day-first allocation using configurable meal counts such as Breakfast 3, Lunch 6, Snacks 2, Dinner 6).
 - **Resilient Scheduling Fallback**: If the AI distribution endpoint is unavailable, the frontend automatically uses local deterministic scheduling logic so bulk uploads still complete.
+- **Admin Bulk Actions**: In Admin Menu Editor, quickly **Delete All Items**, **Remove Upload**, and use custom-styled confirmations for destructive actions.
 - **Voting Interface**: A gamified selection system to gauge item popularity before final procurement approvals. Students can vote for up to **8 items per day**, enforced on both client and server.
 - **Smart Admin Pre-selection**: When finalizing menus, items with the highest votes are automatically pre-selected per meal slot — admins can then review and override as needed.
+- **Finalize Modal Productivity**: Added **Select All / Unselect All** controls during finalization for faster mass selection adjustments.
 - **Branded PDF Reports**: One-click PDF generation producing clean, commercial-grade Excel-style tabular layouts for print menus, now featuring the **university logo** and professional header design.
 
 ### 🔐 Authentication & Security
@@ -63,7 +66,7 @@ Secure login through Supabase Auth (Email/Password + Google OAuth), dividing res
 
 At the heart of the application is a deeply relational Postgres Schema:
 - **`profiles`**: Tied to Auth.users. Stores `full_name`, `role` (admin/student/caterer), and user-specific states (`mess_type`, `assigned_caterer_id`).
-- **`voting_sessions`**: Defines the temporal bounds of a menu planning phase (`start_date`, `end_date`, `status` [draft, open_for_voting, finalized]).
+- **`voting_sessions`**: Defines the temporal bounds of a menu planning phase (`start_date`, `end_date`, `session_weeks`, `status` [draft, open_for_voting, finalized]).
 - **`menu_items`**: Proposed dishes. Linked to `session_id`. Contains `meal_type` (e.g. breakfast) and `approval_status`.
 - **`votes`**: Junction table bridging `profiles` and `menu_items`, ensuring unique constraints (one vote per user/meal).
 - **`feedbacks`**: Stores raw qualitative data from students linking to `caterer_id`.
@@ -122,7 +125,7 @@ Consolidates raw student feedback into an intelligent executive summary.
   ```
 
 ### 4. AI/Deterministic CSV Distribution
-Distributes uploaded CSV menu items over the 14-day cycle with selectable scheduling strategy.
+Distributes uploaded CSV menu items over a configurable session window (7 or 14 days) with selectable scheduling strategy.
 
 **Endpoint**: `POST /api/ai/distribute-csv`
 
@@ -133,7 +136,7 @@ Distributes uploaded CSV menu items over the 14-day cycle with selectable schedu
       { "name": "Idli", "meal_type": "breakfast", "description": "Bulk Upload" },
       { "name": "Rice", "meal_type": "lunch", "description": "Bulk Upload" }
     ],
-    "days": 14,
+    "days": 7,
     "distributionMode": "min-config",
     "mealCounts": {
       "breakfast": 3,
