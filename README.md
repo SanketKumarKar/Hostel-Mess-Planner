@@ -37,6 +37,8 @@ Secure login through Supabase Auth (Email/Password + Google OAuth), dividing res
 
 ### 🧠 AI-Powered Operations
 - **Feedback Analysis**: Features deep AI integration to automatically summarize hundreds of student feedback strings into consumable executive reports for admins and caterers. This turns raw sentiment into actionable insights, identifying patterns in food quality, timing, and specific dish feedback.
+- **Admin Feedback Oversight**: Clicking **Pending Feedbacks** in the Admin dashboard now opens a modal with caterer-wise pending response counts, making follow-ups quicker.
+- **Compact Vote Metrics**: Vote totals in admin views are now compactly formatted (for example, `1000 -> 1k`, `2500 -> 2.5k`) for easier scanning.
 
 ### 📢 Targeted Announcements System
 - Caterers can broadcast real-time announcements directly to the dashboard of students assigned to their specific mess type, ensuring updates like "Lunch delayed by 15 mins" reach the right audience instantly.

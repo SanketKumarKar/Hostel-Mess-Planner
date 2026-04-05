@@ -8,6 +8,13 @@ import { buildSlotOptions, formatSlotLabel, getTotalSlots } from '../utils/menuS
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+const formatCompactVotes = (value) => {
+    const count = Number(value) || 0;
+    if (count < 1000) return String(count);
+    const compact = (count / 1000).toFixed(count % 1000 === 0 ? 0 : 1);
+    return `${compact}k`;
+};
+
 const AdminDashboard = () => {
     const [sessions, setSessions] = useState([]);
     const [showCreate, setShowCreate] = useState(false);
@@ -19,6 +26,9 @@ const AdminDashboard = () => {
     const [summaryLoading, setSummaryLoading] = useState(false);
     const [summaryText, setSummaryText] = useState('');
     const [showSummaryModal, setShowSummaryModal] = useState(false);
+    const [showPendingFeedbackModal, setShowPendingFeedbackModal] = useState(false);
+    const [pendingByCatererLoading, setPendingByCatererLoading] = useState(false);
+    const [pendingByCaterer, setPendingByCaterer] = useState([]);
     const [title, setTitle] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -70,6 +80,37 @@ const AdminDashboard = () => {
         } finally { setSummaryLoading(false); }
     };
 
+    const handleOpenPendingFeedbackModal = async () => {
+        setShowPendingFeedbackModal(true);
+        setPendingByCatererLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('feedbacks')
+                .select('caterer_id, caterer:profiles!caterer_id(full_name)')
+                .is('response', null);
+
+            if (error) throw error;
+
+            const grouped = (data || []).reduce((acc, row) => {
+                const key = row.caterer_id || 'unknown';
+                const name = row.caterer?.full_name || 'Unknown Caterer';
+                if (!acc[key]) {
+                    acc[key] = { id: key, name, count: 0 };
+                }
+                acc[key].count += 1;
+                return acc;
+            }, {});
+
+            const sorted = Object.values(grouped).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+            setPendingByCaterer(sorted);
+        } catch {
+            toast.error('Failed to load pending feedback details');
+            setPendingByCaterer([]);
+        } finally {
+            setPendingByCatererLoading(false);
+        }
+    };
+
     const weekBadge = (label) => {
         if (!label) return null;
         return (<span className={`text-xs px-2 py-0.5 rounded-full font-bold uppercase ${label === 'week1' ? 'bg-blue-100 text-blue-700' : 'bg-violet-100 text-violet-700'}`}>{label === 'week1' ? 'W1' : 'W2'}</span>);
@@ -95,8 +136,14 @@ const AdminDashboard = () => {
             {activeTab === 'sessions' && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
                     <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3"><div className="p-2 bg-indigo-50 text-indigo-600 rounded-full"><PlayCircle size={20} /></div><div><p className="text-xs text-gray-500 font-medium">Active Sessions</p><h3 className="text-xl font-bold text-gray-800">{stats.activeSessions}</h3></div></div>
-                    <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3"><div className="p-2 bg-orange-50 text-orange-600 rounded-full"><MessageSquare size={20} /></div><div><p className="text-xs text-gray-500 font-medium">Pending Feedbacks</p><h3 className="text-xl font-bold text-gray-800">{stats.pendingFeedbacks}</h3></div></div>
-                    <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3"><div className="p-2 bg-green-50 text-green-600 rounded-full"><Users size={20} /></div><div><p className="text-xs text-gray-500 font-medium">Total Votes</p><h3 className="text-xl font-bold text-gray-800">{stats.totalVotes}</h3></div></div>
+                    <button onClick={handleOpenPendingFeedbackModal} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3 text-left hover:shadow-md hover:border-orange-200 transition-all">
+                        <div className="p-2 bg-orange-50 text-orange-600 rounded-full"><MessageSquare size={20} /></div>
+                        <div>
+                            <p className="text-xs text-gray-500 font-medium">Pending Feedbacks</p>
+                            <h3 className="text-xl font-bold text-gray-800">{stats.pendingFeedbacks}</h3>
+                        </div>
+                    </button>
+                    <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3"><div className="p-2 bg-green-50 text-green-600 rounded-full"><Users size={20} /></div><div><p className="text-xs text-gray-500 font-medium">Total Votes</p><h3 className="text-xl font-bold text-gray-800">{formatCompactVotes(stats.totalVotes)}</h3></div></div>
                     <div className="bg-white p-5 rounded-xl shadow-sm border border-red-100 border flex items-center gap-3"><div className="p-2 bg-red-50 text-red-600 rounded-full"><Check size={20} /></div><div><p className="text-xs text-gray-500 font-medium">Pending Approvals</p><h3 className="text-xl font-bold text-gray-800">{stats.pendingApprovals}</h3></div></div>
                 </div>
             )}
@@ -167,6 +214,39 @@ const AdminDashboard = () => {
                     </div>
                 </div>
             )}
+
+            {showPendingFeedbackModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg animate-scale-in">
+                        <div className="p-6 border-b bg-orange-50 rounded-t-xl flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><MessageSquare size={20} className="text-orange-500" />Pending Feedback To Address</h3>
+                            <button onClick={() => setShowPendingFeedbackModal(false)} className="p-1 hover:bg-orange-100 rounded-full"><X size={20} /></button>
+                        </div>
+                        <div className="p-6">
+                            {pendingByCatererLoading ? (
+                                <div className="flex flex-col items-center py-8 text-gray-400">
+                                    <Loader2 size={36} className="animate-spin text-orange-400 mb-3" />
+                                    <p className="text-sm">Loading caterer-wise pending feedback...</p>
+                                </div>
+                            ) : pendingByCaterer.length === 0 ? (
+                                <p className="text-sm text-gray-500 text-center py-6">No pending feedback found. All caterers are up to date.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {pendingByCaterer.map((entry) => (
+                                        <div key={entry.id} className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2">
+                                            <p className="font-medium text-gray-700">{entry.name}</p>
+                                            <span className="text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-700 font-bold">{entry.count} pending</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
+                            <button onClick={() => setShowPendingFeedbackModal(false)} className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-medium">Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -226,7 +306,7 @@ const VoteCount = ({ sessionId }) => {
     const [count, setCount] = useState(null);
     useEffect(() => { supabase.from('votes').select('*, menu_items!inner(session_id)', { count: 'exact', head: true }).eq('menu_items.session_id', sessionId).then(({ count }) => setCount(count || 0)); }, [sessionId]);
     if (count === null) return <span className="text-gray-300 text-sm">...</span>;
-    return <div className="flex items-center gap-1 font-semibold text-gray-700"><span>{count}</span><span className="text-xs font-normal text-gray-500">votes</span></div>;
+    return <div className="flex items-center gap-1 font-semibold text-gray-700"><span>{formatCompactVotes(count)}</span><span className="text-xs font-normal text-gray-500">votes</span></div>;
 };
 
 const FinalizeMenuModal = ({ session, onClose }) => {
