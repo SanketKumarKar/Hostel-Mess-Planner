@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { Check, Calendar, Clock, Utensils, Megaphone } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatSlotLabel } from '../utils/menuSlots';
 
 const StudentDashboard = () => {
     const { profile } = useAuth();
@@ -232,7 +233,7 @@ const VotingInterface = ({ session, onEditProfile }) => {
             {Object.entries(groupedItems).map(([date, meals]) => (
                 <div key={date} className="animate-fade-in">
                     <h3 className="text-xl font-bold text-gray-800 mb-4 sticky top-20 bg-background/95 backdrop-blur py-2 z-10 border-b">
-                        {(() => { const current = new Date(date); const start = new Date(session.start_date); current.setHours(0,0,0,0); start.setHours(0,0,0,0); const diffDays = Math.round((current.getTime() - start.getTime()) / (1000*60*60*24)); const weekNum = Math.floor(diffDays / 7) + 1; return `${current.toLocaleDateString('en-US', { weekday: 'long' })}, Week ${weekNum}`; })()}
+                        {formatSlotLabel(date, session.session_weeks, 'long')}
                     </h3>
                     <div className="grid gap-6">
                         {['breakfast', 'lunch', 'snacks', 'dinner'].map((mealType) => {
@@ -276,7 +277,7 @@ const FinalMenuDisplay = ({ session }) => {
             {Object.entries(grouped).map(([date, meals]) => (
                 <div key={date}>
                     <h3 className="text-xl font-bold text-gray-800 mb-4 sticky top-20 bg-background/95 backdrop-blur py-2 z-10 border-b flex items-center gap-2">
-                        {(() => { const current = new Date(date); const start = new Date(session.start_date); current.setHours(0,0,0,0); start.setHours(0,0,0,0); const diffDays = Math.round((current.getTime() - start.getTime()) / (1000*60*60*24)); const weekNum = Math.floor(diffDays / 7) + 1; return `${current.toLocaleDateString('en-US', { weekday: 'long' })}, Week ${weekNum}`; })()}
+                        {formatSlotLabel(date, session.session_weeks, 'long')}
                         <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full uppercase">Final</span>
                     </h3>
                     <div className="grid gap-6">

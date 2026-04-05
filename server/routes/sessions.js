@@ -20,10 +20,11 @@ module.exports = (supabase) => {
     // Create session (Admin only)
     router.post('/', async (req, res) => {
         try {
-            const { title, start_date, end_date } = req.body;
+            const { title, start_date, end_date, session_weeks } = req.body;
+            const normalizedWeeks = Number(session_weeks) === 1 ? 1 : 2;
             const { data, error } = await supabase
                 .from('voting_sessions')
-                .insert({ title, start_date, end_date, status: 'draft' })
+                .insert({ title, start_date, end_date, session_weeks: normalizedWeeks, status: 'draft' })
                 .select()
                 .single();
 

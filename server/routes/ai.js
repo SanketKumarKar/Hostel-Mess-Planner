@@ -21,13 +21,20 @@ module.exports = (supabase) => {
             const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
             const ingredientsList = ingredients.join(', ');
+            const normalizedMealType = String(mealType || '').toLowerCase().trim();
             const messLabel = messType === 'non_veg' ? 'Non-Vegetarian' :
                 messType === 'veg' ? 'Vegetarian' :
                     messType === 'food_park' ? 'Food Park (any type)' : 'Special';
+            const cuisineBalanceInstruction =
+                normalizedMealType === 'lunch' || normalizedMealType === 'dinner'
+                    ? 'CRITICAL BALANCE RULE: Ensure the 5 dishes are culturally balanced so students with North Indian and South Indian preferences both have suitable choices. Include at least 2 clearly North Indian style dishes and at least 2 clearly South Indian style dishes in the 5 suggestions.'
+                    : 'Prefer variety across regional Indian styles where possible.';
 
             const prompt = `You are an expert Indian hostel mess chef. A caterer has the following raw materials available: ${ingredientsList}.
             
 Suggest exactly 5 dishes suitable for ${mealType} in a ${messLabel} hostel mess that can be prepared IN BULK for hundreds of students using ONLY these ingredients (assume standard pantry staples like salt, oil, spices are always available).
+
+${cuisineBalanceInstruction}
 
 RESPOND IN THIS EXACT JSON FORMAT (no markdown, no extra text, just pure JSON array):
 [
@@ -135,6 +142,133 @@ Be objective, professional, and actionable. Do not use bullet points - write in 
 
             const assignments = new Array(items.length);
 
+            const northKeywords = [
+                'roti', 'chapati', 'paratha', 'naan', 'rajma', 'chole', 'dal makhani', 'paneer',
+                'kadhi', 'aloo', 'jeera rice', 'pulao', 'palak', 'mutter', 'kulcha', 'amritsari',
+            ];
+            const southKeywords = [
+                'idli', 'dosa', 'uttapam', 'upma', 'sambar', 'rasam', 'curd rice', 'lemon rice',
+                'tamarind rice', 'pongal', 'avial', 'poriyal', 'kootu', 'appam', 'puttu', 'bisi bele',
+            ];
+
+            const detectCuisine = (item) => {
+                const text = `${item.name || ''} ${item.description || ''}`.toLowerCase();
+                const hasNorth = northKeywords.some((k) => text.includes(k));
+                const hasSouth = southKeywords.some((k) => text.includes(k));
+
+                if (hasNorth && hasSouth) return 'both';
+                if (hasNorth) return 'north';
+                if (hasSouth) return 'south';
+                return 'neutral';
+            };
+
+            const distributeLunchDinnerBalanced = (meal) => {
+                const mealItems = buckets[meal];
+                if (!mealItems || mealItems.length === 0) return;
+
+                const pool = {
+                    north: [],
+                    south: [],
+                    both: [],
+                    neutral: [],
+                };
+
+                mealItems.forEach((item) => {
+                    const cuisine = detectCuisine(item);
+                    pool[cuisine].push(item);
+                });
+
+                const totalMealItems = mealItems.length;
+                const dayCaps = Array.from({ length: totalDays }, (_, day) => {
+                    if (mode === 'min-config') return perDayCounts[meal] || 0;
+                    const base = Math.floor(totalMealItems / totalDays);
+                    const remainder = totalMealItems % totalDays;
+                    return day < remainder ? base + 1 : base;
+                });
+
+                const dayStats = Array.from({ length: totalDays }, () => ({
+                    total: 0,
+                    north: 0,
+                    south: 0,
+                }));
+
+                const takeAny = () => (
+                    pool.north.shift() ||
+                    pool.south.shift() ||
+                    pool.both.shift() ||
+                    pool.neutral.shift() ||
+                    null
+                );
+
+                const place = (day, item, cuisineHint) => {
+                    if (!item) return;
+                    assignments[item.__idx] = day;
+                    dayStats[day].total += 1;
+
+                    const resolvedCuisine = cuisineHint || detectCuisine(item);
+                    if (resolvedCuisine === 'north') dayStats[day].north += 1;
+                    if (resolvedCuisine === 'south') dayStats[day].south += 1;
+                    if (resolvedCuisine === 'both') {
+                        dayStats[day].north += 1;
+                        dayStats[day].south += 1;
+                    }
+                };
+
+                const takeForNorth = () => pool.north.shift() || pool.both.shift() || pool.neutral.shift() || pool.south.shift() || null;
+                const takeForSouth = () => pool.south.shift() || pool.both.shift() || pool.neutral.shift() || pool.north.shift() || null;
+
+                // First pass: try to guarantee a North and South style option each day (best effort).
+                for (let day = 0; day < totalDays; day += 1) {
+                    if (dayStats[day].total >= dayCaps[day]) continue;
+
+                    const northItem = takeForNorth();
+                    if (northItem) {
+                        place(day, northItem);
+                    }
+
+                    if (dayStats[day].total >= dayCaps[day]) continue;
+
+                    const southItem = takeForSouth();
+                    if (southItem) {
+                        place(day, southItem);
+                    }
+                }
+
+                // Second pass: fill remaining slots while keeping north/south counts as balanced as possible.
+                for (let day = 0; day < totalDays; day += 1) {
+                    while (dayStats[day].total < dayCaps[day]) {
+                        let nextItem;
+                        if (dayStats[day].north <= dayStats[day].south) {
+                            nextItem = takeForNorth();
+                        } else {
+                            nextItem = takeForSouth();
+                        }
+
+                        if (!nextItem) {
+                            nextItem = takeAny();
+                        }
+
+                        if (!nextItem) break;
+                        place(day, nextItem);
+                    }
+                }
+
+                // Any leftovers due to caps or uneven constraints: place by least-filled day.
+                let leftover = takeAny();
+                while (leftover) {
+                    let targetDay = 0;
+                    for (let day = 1; day < totalDays; day += 1) {
+                        if (dayStats[day].total < dayStats[targetDay].total) {
+                            targetDay = day;
+                        }
+                    }
+                    place(targetDay, leftover);
+                    leftover = takeAny();
+                }
+
+                buckets[meal] = [];
+            };
+
             const hasPendingMealItems = () => (
                 buckets.breakfast.length > 0 ||
                 buckets.lunch.length > 0 ||
@@ -144,6 +278,11 @@ Be objective, professional, and actionable. Do not use bullet points - write in 
 
             if (mode === 'equal') {
                 for (const meal of mealOrder) {
+                    if (meal === 'lunch' || meal === 'dinner') {
+                        distributeLunchDinnerBalanced(meal);
+                        continue;
+                    }
+
                     let dayPointer = 0;
                     while (buckets[meal].length > 0) {
                         const nextItem = buckets[meal].shift();
@@ -152,6 +291,9 @@ Be objective, professional, and actionable. Do not use bullet points - write in 
                     }
                 }
             } else {
+                distributeLunchDinnerBalanced('lunch');
+                distributeLunchDinnerBalanced('dinner');
+
                 // Fill one full day at a time in meal order, then move to the next day.
                 while (hasPendingMealItems()) {
                     for (let day = 0; day < totalDays; day += 1) {

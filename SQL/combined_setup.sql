@@ -49,11 +49,29 @@ CREATE TABLE IF NOT EXISTS public.voting_sessions (
   start_date date NOT NULL,
   end_date date NOT NULL,
   title text,
+  session_weeks integer NOT NULL DEFAULT 2,
   status session_status DEFAULT 'draft',
   created_by uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-  CONSTRAINT check_dates CHECK (end_date >= start_date)
+  CONSTRAINT check_dates CHECK (end_date >= start_date),
+  CONSTRAINT check_session_weeks CHECK (session_weeks IN (1, 2))
 );
+
+ALTER TABLE public.voting_sessions
+  ADD COLUMN IF NOT EXISTS session_weeks integer NOT NULL DEFAULT 2;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'check_session_weeks'
+      AND conrelid = 'public.voting_sessions'::regclass
+  ) THEN
+    ALTER TABLE public.voting_sessions
+      ADD CONSTRAINT check_session_weeks CHECK (session_weeks IN (1, 2));
+  END IF;
+END $$;
 
 -- MENU ITEMS
 CREATE TABLE IF NOT EXISTS public.menu_items (

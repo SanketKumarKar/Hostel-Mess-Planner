@@ -2,6 +2,30 @@ const PDFDocument = require('pdfkit');
 const path = require('path');
 const fs = require('fs');
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MENU_SLOT_BASE_DATE = '2000-01-03'; // Monday of Wk1
+const parseLocalDate = (dateStr) => new Date(`${dateStr}T00:00:00`);
+const getSessionWeeks = (session) => Number(session?.session_weeks) === 1 ? 1 : 2;
+
+const getSlotLabel = (dateStr, sessionWeeks, weekdayStyle = 'short') => {
+    const totalSlots = getSessionWeeks({ session_weeks: sessionWeeks }) * 7;
+    const current = parseLocalDate(dateStr);
+    const start = parseLocalDate(MENU_SLOT_BASE_DATE);
+    const diffDays = Math.floor((current.getTime() - start.getTime()) / DAY_MS);
+    const cycleIndex = ((diffDays % totalSlots) + totalSlots) % totalSlots;
+
+    const slotDate = new Date(start);
+    slotDate.setDate(slotDate.getDate() + cycleIndex);
+    const dayName = slotDate.toLocaleDateString('en-US', { weekday: weekdayStyle });
+
+    if (totalSlots === 7) {
+        return dayName;
+    }
+
+    const weekNum = Math.floor(cycleIndex / 7) + 1;
+    return `${dayName}, Wk${weekNum}`;
+};
+
 const generateReport = (session, items, messType, res) => {
     const doc = new PDFDocument({ margin: 50 });
 
@@ -105,15 +129,7 @@ const generateReport = (session, items, messType, res) => {
 
         let isEvenRow = false;
         Object.keys(groupedByDate).sort().forEach(date => {
-            const current = new Date(date);
-            const start = new Date(session.start_date);
-            current.setHours(0,0,0,0);
-            start.setHours(0,0,0,0);
-            const diffDays = Math.round((current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-            const weekNum = Math.floor(diffDays / 7) + 1;
-            
-            const dayName = current.toLocaleDateString('en-US', { weekday: 'short' });
-            const dateStr = `${dayName}, Wk${weekNum}`;
+            const dateStr = getSlotLabel(date, session.session_weeks, 'short');
 
             const meals = groupedByDate[date];
             const formatMeal = (mealArr) => mealArr ? mealArr.map(m => `• ${m}`).join('\n') : '-';

@@ -4,6 +4,7 @@ import { Plus, Trash, PlayCircle, StopCircle, Check, Settings, MessageSquare, Us
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
+import { buildSlotOptions, formatSlotLabel, getTotalSlots } from '../utils/menuSlots';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -21,6 +22,7 @@ const AdminDashboard = () => {
     const [title, setTitle] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [sessionWeeks, setSessionWeeks] = useState(2);
 
     useEffect(() => { fetchSessions(); fetchStats(); }, []);
 
@@ -45,9 +47,9 @@ const AdminDashboard = () => {
     const createSession = async (e) => {
         e.preventDefault();
         try {
-            const { error } = await supabase.from('voting_sessions').insert({ title, start_date: startDate, end_date: endDate, status: 'draft' });
+            const { error } = await supabase.from('voting_sessions').insert({ title, start_date: startDate, end_date: endDate, session_weeks: Number(sessionWeeks) === 1 ? 1 : 2, status: 'draft' });
             if (error) throw error;
-            setShowCreate(false); setTitle(''); setStartDate(''); setEndDate('');
+            setShowCreate(false); setTitle(''); setStartDate(''); setEndDate(''); setSessionWeeks(2);
             fetchSessions();
         } catch (error) { toast.error('Error creating session'); }
     };
@@ -107,6 +109,7 @@ const AdminDashboard = () => {
                             <p className="text-sm text-gray-500 mb-4">Sessions start in <strong>Draft</strong> mode so caterers can plan the menu before admin approves items.</p>
                             <form onSubmit={createSession} className="flex flex-col md:flex-row gap-4 items-end flex-wrap">
                                 <div className="flex-1 min-w-[180px]"><label className="block text-sm font-medium text-gray-700 mb-1">Title</label><input type="text" required placeholder="e.g. March Week 1" className="w-full px-3 py-2 border rounded-lg" value={title} onChange={e => setTitle(e.target.value)} /></div>
+                                <div className="w-full md:w-48"><label className="block text-sm font-medium text-gray-700 mb-1">Menu Cycle</label><select className="w-full px-3 py-2 border rounded-lg" value={sessionWeeks} onChange={e => setSessionWeeks(Number(e.target.value))}><option value={1}>1 Week (Mon-Sun)</option><option value={2}>2 Weeks (Mon Wk1 - Sun Wk2)</option></select></div>
                                 <div className="w-full md:w-44"><label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label><input type="date" required className="w-full px-3 py-2 border rounded-lg" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
                                 <div className="w-full md:w-44"><label className="block text-sm font-medium text-gray-700 mb-1">End Date</label><input type="date" required className="w-full px-3 py-2 border rounded-lg" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
                                 <div className="flex gap-2"><button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button><button type="submit" className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700">Create</button></div>
@@ -230,6 +233,7 @@ const FinalizeMenuModal = ({ session, onClose }) => {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const allSelected = items.length > 0 && items.every((item) => item.is_selected);
 
     useEffect(() => {
         const fetchItems = async () => {
@@ -244,6 +248,7 @@ const FinalizeMenuModal = ({ session, onClose }) => {
     }, [session.id]);
 
     const toggleSelection = (itemId) => setItems(prev => prev.map(i => i.id === itemId ? { ...i, is_selected: !i.is_selected } : i));
+    const setAllSelections = (selected) => setItems(prev => prev.map(i => ({ ...i, is_selected: selected })));
 
     const handleSave = async () => {
         setSaving(true);
@@ -274,13 +279,26 @@ const FinalizeMenuModal = ({ session, onClose }) => {
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-scale-in">
-                <div className="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-xl"><div><h3 className="text-xl font-bold text-gray-800">Finalize Menu</h3><p className="text-sm text-gray-500">{session.title} • Only approved items shown</p></div></div>
+                <div className="p-6 border-b flex justify-between items-start bg-gray-50 rounded-t-xl">
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-800">Finalize Menu</h3>
+                        <p className="text-sm text-gray-500">{session.title} • Only approved items shown</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setAllSelections(!allSelected)}
+                        disabled={loading || items.length === 0}
+                        className="px-4 py-2 text-xs font-bold rounded-lg border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        {allSelected ? 'Unselect All' : 'Select All'}
+                    </button>
+                </div>
                 <div className="flex-1 overflow-y-auto p-6 space-y-8">
                     {loading ? <div>Loading...</div> : Object.entries(grouped).sort().map(([key, groupItems]) => {
                         const [date, messType] = key.split(' | ');
                         return (
                             <div key={key}>
-                                <h4 className="font-bold text-gray-700 mb-3 sticky top-0 bg-white py-2 border-b">{new Date(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}<span className="ml-2 px-2 py-0.5 rounded text-xs bg-gray-100 uppercase">{messType}</span></h4>
+                                <h4 className="font-bold text-gray-700 mb-3 py-2 border-b">{new Date(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}<span className="ml-2 px-2 py-0.5 rounded text-xs bg-gray-100 uppercase">{messType}</span></h4>
                                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {groupItems.map((item) => (
                                         <div key={item.id} onClick={() => toggleSelection(item.id)} className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all flex justify-between items-start gap-3 ${item.is_selected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 hover:border-gray-300'}`}>
@@ -386,9 +404,11 @@ const Toggle = ({ enabled, onToggle }) => (
 );
 
 const AdminMenuEditor = ({ session, onClose }) => {
+    const slotOptions = buildSlotOptions(session.session_weeks);
+    const totalSlots = getTotalSlots(session.session_weeks);
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [date, setDate] = useState(session.start_date);
+    const [date, setDate] = useState(slotOptions[0]?.value || session.start_date);
     const [mealType, setMealType] = useState('breakfast');
     const [messType, setMessType] = useState('veg');
     const [name, setName] = useState('');
@@ -400,6 +420,9 @@ const AdminMenuEditor = ({ session, onClose }) => {
     const [csvUploadedIds, setCsvUploadedIds] = useState([]);
     const [deletedCsvItems, setDeletedCsvItems] = useState([]);
     const [pendingRecoveryId, setPendingRecoveryId] = useState(null);
+    const [deletingAll, setDeletingAll] = useState(false);
+    const [confirmModal, setConfirmModal] = useState({ open: false, type: null, payload: null });
+    const [confirmLoading, setConfirmLoading] = useState(false);
     const [distributionMode, setDistributionMode] = useState('min-config');
     const [minMealCounts, setMinMealCounts] = useState({ breakfast: 3, lunch: 6, snacks: 2, dinner: 6 });
 
@@ -413,6 +436,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
     };
 
     useEffect(() => { fetchItems(); }, [session.id]);
+    useEffect(() => { if (slotOptions.length > 0) setDate(slotOptions[0].value); }, [session.id]);
 
     const handleSubmit = async (e) => {
         e.preventDefault(); setLoading(true);
@@ -507,6 +531,13 @@ const AdminMenuEditor = ({ session, onClose }) => {
         }));
     };
 
+    const formatDateKey = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
     const handleCsvSubmit = async () => {
         if (!csvFile) return toast.error('Please select a CSV file');
         setCsvParsing(true);
@@ -557,24 +588,24 @@ const AdminMenuEditor = ({ session, onClose }) => {
                     try {
                         const res = await axios.post(`${API_URL}/api/ai/distribute-csv`, {
                             items: rawItems,
-                            days: 14, // standard 2 weeks for this application architecture
+                            days: totalSlots,
                             distributionMode,
                             mealCounts,
                         });
                         distributed = res.data.distributed || [];
                     } catch (apiError) {
                         console.error('distribute-csv API unavailable, falling back to local scheduling:', apiError);
-                        distributed = distributeLocally(rawItems, 14, distributionMode, mealCounts);
+                        distributed = distributeLocally(rawItems, totalSlots, distributionMode, mealCounts);
                         toast('API unavailable. Scheduled locally instead.', { id: 'aiToast', icon: '⚠️' });
                     }
                     
                     // Map day_index back into proper dates
                     const dbItems = distributed.map(it => {
-                        const d = new Date(session.start_date);
+                        const d = new Date(slotOptions[0]?.value || '2000-01-03');
                         d.setDate(d.getDate() + (it.day_index || 0));
                         return {
                             session_id: session.id,
-                            date_served: d.toISOString().split('T')[0],
+                            date_served: formatDateKey(d),
                             meal_type: it.meal_type,
                             mess_type: messType,
                             name: it.name,
@@ -607,15 +638,27 @@ const AdminMenuEditor = ({ session, onClose }) => {
         });
     };
 
+    const resetCsvState = () => {
+        setCsvUploadedIds([]);
+        setDeletedCsvItems([]);
+        setPendingRecoveryId(null);
+        setCsvFile(null);
+        const fileInput = document.getElementById('csv-upload');
+        if (fileInput) fileInput.value = '';
+    };
+
     const handleDeleteItem = async (item) => {
-        if (!confirm('Delete this item?')) return;
+        setConfirmModal({ open: true, type: 'delete-item', payload: item });
+    };
+
+    const deleteSingleItem = async (item) => {
         await supabase.from('menu_items').delete().eq('id', item.id);
         
         // Push deleted bulk item into the "Unallocated Pool"
         if (csvUploadedIds.includes(item.id)) {
             setDeletedCsvItems(prev => [...prev, item]);
         }
-        fetchItems();
+        await fetchItems();
     };
 
     const handleSelectRecoveredItem = (e) => {
@@ -636,19 +679,61 @@ const AdminMenuEditor = ({ session, onClose }) => {
     };
 
     const handleRemoveCsv = async () => {
-        if (csvUploadedIds.length > 0) {
-            if (!confirm('Warning: This will completely delete ALL items scheduled by this bulk upload from the database, and clear the unallocated memory pool. Proceed?')) return;
-            toast.loading('Deleting scheduled items...', { id: 'del-csv' });
-            await supabase.from('menu_items').delete().in('id', csvUploadedIds);
-            toast.success('Scheduled items removed', { id: 'del-csv' });
+        if (csvUploadedIds.length === 0) return;
+        setConfirmModal({ open: true, type: 'remove-csv', payload: null });
+    };
+
+    const handleDeleteAllItems = async () => {
+        if (items.length === 0) return;
+        setConfirmModal({ open: true, type: 'delete-all', payload: null });
+    };
+
+    const handleConfirmAction = async () => {
+        if (!confirmModal.type) return;
+        setConfirmLoading(true);
+
+        try {
+            if (confirmModal.type === 'delete-item' && confirmModal.payload) {
+                await deleteSingleItem(confirmModal.payload);
+                toast.success('Item deleted successfully.');
+            }
+
+            if (confirmModal.type === 'remove-csv') {
+                toast.loading('Deleting scheduled items...', { id: 'del-csv' });
+                await supabase.from('menu_items').delete().in('id', csvUploadedIds);
+                resetCsvState();
+                await fetchItems();
+                toast.success('Scheduled items removed', { id: 'del-csv' });
+            }
+
+            if (confirmModal.type === 'delete-all') {
+                setDeletingAll(true);
+                toast.loading('Deleting all scheduled items...', { id: 'del-all' });
+
+                const { error } = await supabase
+                    .from('menu_items')
+                    .delete()
+                    .eq('session_id', session.id);
+
+                if (error) throw error;
+
+                resetCsvState();
+                await fetchItems();
+                toast.success('All items deleted successfully.', { id: 'del-all' });
+            }
+        } catch (error) {
+            if (confirmModal.type === 'delete-all') {
+                toast.error('Failed to delete all items.', { id: 'del-all' });
+            } else if (confirmModal.type === 'remove-csv') {
+                toast.error('Failed to remove uploaded items.', { id: 'del-csv' });
+            } else {
+                toast.error('Failed to delete item.');
+            }
+        } finally {
+            setDeletingAll(false);
+            setConfirmLoading(false);
+            setConfirmModal({ open: false, type: null, payload: null });
         }
-        setCsvUploadedIds([]);
-        setDeletedCsvItems([]);
-        setPendingRecoveryId(null);
-        setCsvFile(null);
-        const fileInput = document.getElementById('csv-upload');
-        if(fileInput) fileInput.value = '';
-        fetchItems();
     };
 
     const groupedItems = items.reduce((acc, item) => { const d = item.date_served; if (!acc[d]) acc[d] = {}; if (!acc[d][item.meal_type]) acc[d][item.meal_type] = []; acc[d][item.meal_type].push(item); return acc; }, {});
@@ -668,12 +753,14 @@ const AdminMenuEditor = ({ session, onClose }) => {
                         
                         {/* CSV Upload */}
                         <div className="bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-5 rounded-2xl border border-indigo-100 shadow-sm relative">
-                            {csvUploadedIds.length > 0 && (
-                                <button onClick={handleRemoveCsv} className="absolute top-4 right-4 text-red-600 bg-white px-2.5 py-1.5 rounded-xl hover:bg-red-50 border border-red-200 text-xs font-bold transition-all shadow-sm flex gap-1 items-center" title="Remove CSV & Reset">
-                                    <Trash size={14} /> Remove Upload
-                                </button>
-                            )}
-                            <h4 className="font-bold text-indigo-950 mb-1 flex items-center gap-2 pr-28"><Sparkles size={18} className="text-indigo-500" />AI Bulk Allocation</h4>
+                            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <h4 className="font-bold text-indigo-950 flex items-center gap-2"><Sparkles size={18} className="text-indigo-500" />AI Bulk Allocation</h4>
+                                {csvUploadedIds.length > 0 && (
+                                    <button onClick={handleRemoveCsv} className="w-full sm:w-auto justify-center text-red-600 bg-white px-3 py-2 rounded-xl hover:bg-red-50 border border-red-200 text-sm sm:text-xs font-bold transition-all shadow-sm flex gap-1.5 items-center" title="Remove CSV & Reset">
+                                        <Trash size={14} /> Remove Upload
+                                    </button>
+                                )}
+                            </div>
                             <p className="text-xs leading-5 text-indigo-700/90 block mb-4">Upload a CSV (Breakfast, Lunch, Snacks, Dinner headers). Choose equal distribution or minimum-per-day configuration.</p>
                             
                             <div className="space-y-3.5">
@@ -768,7 +855,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Target Date</label>
                                     <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none text-sm" value={date} onChange={(e) => setDate(e.target.value)}>
-                                        {Array.from({ length: 14 }, (_, i) => { const d = new Date(session.start_date); d.setDate(d.getDate() + i); return { date: d, index: i }; }).map(({ date: d, index: i }) => { const val = d.toISOString().split('T')[0]; const weekNum = Math.floor(i / 7) + 1; const dayName = d.toLocaleDateString('en-US', { weekday: 'long' }); return (<option key={val} value={val}>{dayName}, Week {weekNum}</option>); })}
+                                        {slotOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
                                     </select>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3 mb-2">
@@ -786,12 +873,25 @@ const AdminMenuEditor = ({ session, onClose }) => {
                     </div>
                     
                     <div className="flex-1 p-6 overflow-y-auto bg-white min-h-0">
-                        <div className="flex justify-between items-center mb-6"><h4 className="font-bold text-gray-800">Scheduled Items</h4><span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">{items.length} items</span></div>
+                        <div className="flex justify-between items-center mb-6">
+                            <h4 className="font-bold text-gray-800">Scheduled Items</h4>
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">{items.length} items</span>
+                                <button
+                                    type="button"
+                                    onClick={handleDeleteAllItems}
+                                    disabled={deletingAll || items.length === 0}
+                                    className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    {deletingAll ? 'Deleting...' : 'Delete All Items'}
+                                </button>
+                            </div>
+                        </div>
                         {items.length === 0 ? (<div className="text-center py-20 text-gray-400"><Plus size={48} className="mx-auto mb-4 opacity-20" /><p>No items added. Use manual or bulk allocator.</p></div>) : (
                             <div className="space-y-6">
                                 {Object.entries(groupedItems).sort().map(([dateStr, meals]) => (
                                     <div key={dateStr} className="border rounded-xl overflow-hidden shadow-sm">
-                                        <div className="bg-gray-50 px-4 py-3 border-b font-bold text-gray-700">{(() => { const current = new Date(dateStr); const start = new Date(session.start_date); current.setHours(0,0,0,0); start.setHours(0,0,0,0); const diffDays = Math.round((current.getTime() - start.getTime()) / (1000*60*60*24)); const weekNum = Math.floor(diffDays / 7) + 1; return `${current.toLocaleDateString('en-US', { weekday: 'long' })}, Week ${weekNum}`; })()}</div>
+                                        <div className="bg-gray-50 px-4 py-3 border-b font-bold text-gray-700">{formatSlotLabel(dateStr, session.session_weeks, 'long')}</div>
                                         <div className="divide-y">
                                             {['breakfast', 'lunch', 'snacks', 'dinner'].map(meal => { const mealItems = meals[meal] || []; if (mealItems.length === 0) return null; return (
                                                 <div key={meal} className="p-4 flex gap-4 hover:bg-gray-50/50">
@@ -817,6 +917,48 @@ const AdminMenuEditor = ({ session, onClose }) => {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+
+                        {confirmModal.open && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                                <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden animate-scale-in">
+                                    <div className="p-5 border-b bg-gradient-to-r from-red-50 to-rose-50">
+                                        <h4 className="text-lg font-bold text-gray-900">
+                                            {confirmModal.type === 'delete-all' ? 'Delete All Scheduled Items?' : confirmModal.type === 'remove-csv' ? 'Remove Uploaded CSV Items?' : 'Delete This Item?'}
+                                        </h4>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            {confirmModal.type === 'delete-all'
+                                                ? 'This will remove every menu item in this session. This action cannot be undone.'
+                                                : confirmModal.type === 'remove-csv'
+                                                    ? 'This will delete all items created by the current bulk upload and clear the unallocated memory pool.'
+                                                    : 'This will permanently remove the selected menu item.'}
+                                        </p>
+                                    </div>
+                                    <div className="p-5 flex items-center justify-end gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmModal({ open: false, type: null, payload: null })}
+                                            className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleConfirmAction}
+                                            disabled={confirmLoading || deletingAll}
+                                            className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 disabled:opacity-60 transition-colors"
+                                        >
+                                            {confirmLoading || deletingAll
+                                                ? 'Processing...'
+                                                : confirmModal.type === 'delete-all'
+                                                    ? 'Yes, Delete All'
+                                                    : confirmModal.type === 'remove-csv'
+                                                        ? 'Yes, Remove Upload'
+                                                        : 'Yes, Delete Item'}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>

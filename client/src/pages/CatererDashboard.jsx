@@ -4,6 +4,7 @@ import { Plus, X, Trash2, MessageSquare, Check, Settings, Sparkles, Loader2, Meg
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { buildSlotOptions, formatSlotLabel } from '../utils/menuSlots';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -61,9 +62,10 @@ const CatererDashboard = () => {
 };
 
 const MenuEditor = ({ session, onClose }) => {
+    const slotOptions = buildSlotOptions(session.session_weeks);
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [date, setDate] = useState(session.start_date);
+    const [date, setDate] = useState(slotOptions[0]?.value || session.start_date);
     const [mealType, setMealType] = useState('breakfast');
     const [messType, setMessType] = useState('veg');
     const [name, setName] = useState('');
@@ -81,6 +83,7 @@ const MenuEditor = ({ session, onClose }) => {
     }, [session.id]);
 
     useEffect(() => { fetchItems(); }, [fetchItems]);
+    useEffect(() => { if (slotOptions.length > 0) setDate(slotOptions[0].value); }, [session.id]);
 
     const handleSubmit = async (e) => {
         e.preventDefault(); setLoading(true);
@@ -153,7 +156,7 @@ const MenuEditor = ({ session, onClose }) => {
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
                                     <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" value={date} onChange={(e) => setDate(e.target.value)}>
-                                        {(() => { const dates = Array.from({ length: 14 }, (_, i) => { const d = new Date(session.start_date); d.setDate(d.getDate() + i); return { date: d, index: i }; }); return dates.map(({ date: d, index: i }) => { const val = d.toISOString().split('T')[0]; const weekNum = Math.floor(i / 7) + 1; const dayName = d.toLocaleDateString('en-US', { weekday: 'long' }); return (<option key={val} value={val}>{dayName}, Week {weekNum}</option>); }); })()}
+                                        {slotOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
                                     </select>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
@@ -181,7 +184,7 @@ const MenuEditor = ({ session, onClose }) => {
                             <div className="space-y-8">
                                 {Object.entries(groupedItems).sort().map(([dateStr, meals]) => (
                                     <div key={dateStr} className="border rounded-xl overflow-hidden">
-                                        <div className="bg-gray-50 px-4 py-3 border-b font-bold text-gray-700">{(() => { const current = new Date(dateStr); const start = new Date(session.start_date); current.setHours(0,0,0,0); start.setHours(0,0,0,0); const diffDays = Math.round((current.getTime() - start.getTime()) / (1000*60*60*24)); const weekNum = Math.floor(diffDays / 7) + 1; return `${current.toLocaleDateString('en-US', { weekday: 'long' })}, Week ${weekNum}`; })()}</div>
+                                        <div className="bg-gray-50 px-4 py-3 border-b font-bold text-gray-700">{formatSlotLabel(dateStr, session.session_weeks, 'long')}</div>
                                         <div className="divide-y">
                                             {['breakfast', 'lunch', 'snacks', 'dinner'].map(meal => { const mealItems = meals[meal] || []; if (mealItems.length === 0) return null; return (
                                                 <div key={meal} className="p-4 flex gap-4">
