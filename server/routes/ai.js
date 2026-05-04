@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const axios = require('axios');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -97,6 +98,134 @@ Be objective, professional, and actionable. Do not use bullet points - write in 
         } catch (error) {
             console.error('AI summarize-feedback error:', error);
             res.status(500).json({ error: 'Failed to summarize feedback: ' + error.message });
+        }
+    });
+
+    /**
+     * POST /api/ai/upload-food-image
+     * Proxies image upload to imgbb API
+     * Body: { image: base64String }
+     * Returns: { url: string, deleteUrl: string }
+     */
+    router.post('/upload-food-image', async (req, res) => {
+        try {
+            const { image } = req.body;
+            if (!image) {
+                return res.status(400).json({ error: 'image (base64) is required' });
+            }
+
+            const apiKey = process.env.IMGBB_API_KEY;
+            if (!apiKey) {
+                return res.status(500).json({ error: 'IMGBB_API_KEY not configured on server' });
+            }
+
+            // Upload to imgbb with 24-hour expiration
+            const formData = new URLSearchParams();
+            formData.append('key', apiKey);
+            formData.append('image', image);
+            formData.append('expiration', '86400'); // 24 hours
+
+            const response = await axios.post('https://api.imgbb.com/1/upload', formData, {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                maxBodyLength: Infinity,
+            });
+
+            if (response.data && response.data.success) {
+                res.json({
+                    url: response.data.data.display_url,
+                    thumb: response.data.data.thumb?.url,
+                    deleteUrl: response.data.data.delete_url,
+                });
+            } else {
+                res.status(500).json({ error: 'imgbb upload failed' });
+            }
+        } catch (error) {
+            console.error('Image upload error:', error?.response?.data || error.message);
+            res.status(500).json({ error: 'Failed to upload image: ' + (error?.response?.data?.error?.message || error.message) });
+        }
+    });
+
+    /**
+     * POST /api/ai/summarize-daily-feedback
+     * Summarizes today's food feedback for a caterer using Gemini AI
+     * Body: { catererId: string, date?: string, mealType?: string }
+     * Returns: { summary: string, feedbackCount: number, mealType: string, date: string }
+     */
+    router.post('/summarize-daily-feedback', async (req, res) => {
+        try {
+            const { catererId, date, mealType, feedbacks } = req.body;
+            if (!catererId) {
+                return res.status(400).json({ error: 'catererId is required' });
+            }
+
+            if (!feedbacks || !Array.isArray(feedbacks)) {
+                 return res.status(400).json({ error: 'feedbacks array is required' });
+            }
+
+            if (!feedbacks || feedbacks.length === 0) {
+                return res.json({
+                    summary: 'No daily food feedback has been submitted yet for this period. Once students start submitting feedback, you\'ll see AI-generated insights here.',
+                    feedbackCount: 0,
+                    mealType: mealType || 'all',
+                    date: date || new Date().toISOString().split('T')[0],
+                    feedbacks: [],
+                });
+            }
+
+            // Build context for AI
+            const feedbackText = feedbacks.map((fb, i) => {
+                let entry = `${i + 1}. Student "${fb.student?.full_name || 'Anonymous'}": "${fb.message}"`;
+                if (fb.meal_type) entry += ` [Meal: ${fb.meal_type}]`;
+                if (fb.day_label) entry += ` [Day: ${fb.day_label}]`;
+                return entry;
+            }).join('\n');
+
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+            const mealLabel = mealType ? mealType.charAt(0).toUpperCase() + mealType.slice(1) : 'All Meals';
+            const dateLabel = date || 'today';
+
+            const prompt = `You are a food quality analyst for a hostel mess. Below are ${feedbacks.length} student feedback entries for ${mealLabel} on ${dateLabel}:
+
+${feedbackText}
+
+Provide a STRUCTURED FEEDBACK SUMMARY for the caterer in this exact format:
+
+**Overall Rating:** (Good / Average / Needs Improvement)
+
+**Key Issues:**
+- List specific items mentioned and what needs fixing (e.g., "Dal was too salty", "Rice was undercooked")
+- Be very specific about which food items have problems
+
+**What Worked Well:**
+- List any positive mentions
+
+**Actionable Improvements:**
+- Give 2-3 specific, actionable suggestions the caterer can implement immediately for the next meal
+
+Keep it concise, direct, and actionable. Focus on specific food items mentioned in the feedback.`;
+
+            const result = await model.generateContent(prompt);
+            const summary = result.response.text().trim();
+
+            res.json({
+                summary,
+                feedbackCount: feedbacks.length,
+                mealType: mealType || 'all',
+                date: date || new Date().toISOString().split('T')[0],
+                feedbacks: feedbacks.map(fb => ({
+                    id: fb.id,
+                    message: fb.message,
+                    studentName: fb.student?.full_name || 'Anonymous',
+                    imageUrl: fb.image_url,
+                    mealType: fb.meal_type,
+                    dayLabel: fb.day_label,
+                    createdAt: fb.created_at,
+                })),
+            });
+        } catch (error) {
+            console.error('AI summarize-daily-feedback error:', error);
+            res.status(500).json({ error: 'Failed to summarize daily feedback: ' + error.message });
         }
     });
 

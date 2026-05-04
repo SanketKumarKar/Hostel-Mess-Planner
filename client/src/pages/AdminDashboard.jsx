@@ -13,7 +13,7 @@ const formatCompactVotes = (value) => {
     if (count < 1000) return String(count);
     const compact = (count / 1000).toFixed(count % 1000 === 0 ? 0 : 1);
     return `${compact}k`;
-};
+}; //format votes value from 1320 to 1.32k etc
 
 const AdminDashboard = () => {
     const [sessions, setSessions] = useState([]);
@@ -73,7 +73,7 @@ const AdminDashboard = () => {
         try {
             const { data: feedbacks, error } = await supabase.from('feedbacks').select('*, student:profiles!student_id(full_name), caterer:profiles!caterer_id(full_name)').order('created_at', { ascending: false }).limit(100);
             if (error) throw error;
-            const res = await axios.post(`${API_URL}/api/ai/summarize-feedback`, { feedbacks });
+            const res = await axios.post(`${API_URL}/api/ai/summarize-feedback`, { feedbacks });//post and get summary
             setSummaryText(res.data.summary);
         } catch (err) {
             setSummaryText('Failed to generate summary: ' + (err.response?.data?.error || err.message));
@@ -117,7 +117,7 @@ const AdminDashboard = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in">
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-800">Admin Dashboard</h2>
                 <div className="flex gap-2">
@@ -203,14 +203,14 @@ const AdminDashboard = () => {
             {showSummaryModal && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-lg animate-scale-in">
-                        <div className="p-6 border-b bg-gradient-to-r from-indigo-50 to-purple-50 rounded-t-xl flex justify-between items-center">
+                        <div className="p-6 border-b bg-gradient-to-r from-indigo-500 to-purple-500 rounded-t-xl flex justify-between items-center">
                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Sparkles size={20} className="text-indigo-500" />AI Feedback Summary</h3>
                             <button onClick={() => setShowSummaryModal(false)} className="p-1 hover:bg-gray-200 rounded-full"><X size={20} /></button>
                         </div>
                         <div className="p-6">
                             {summaryLoading ? (<div className="flex flex-col items-center py-8 text-gray-400"><Loader2 size={36} className="animate-spin text-indigo-400 mb-3" /><p className="text-sm">Gemini is analyzing student feedback...</p></div>) : (<p className="text-gray-700 leading-relaxed">{summaryText}</p>)}
                         </div>
-                        <div className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end"><button onClick={() => setShowSummaryModal(false)} className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-medium">Close</button></div>
+                        <div className="p-4 border-t bg-gray-100 rounded-b-xl flex justify-end"><button onClick={() => setShowSummaryModal(false)} className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-medium">Close</button></div>
                     </div>
                 </div>
             )}
@@ -218,9 +218,9 @@ const AdminDashboard = () => {
             {showPendingFeedbackModal && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-lg animate-scale-in">
-                        <div className="p-6 border-b bg-orange-50 rounded-t-xl flex justify-between items-center">
+                        <div className="p-6 border-b bg-orange-500 rounded-t-xl flex justify-between items-center">
                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><MessageSquare size={20} className="text-orange-500" />Pending Feedback To Address</h3>
-                            <button onClick={() => setShowPendingFeedbackModal(false)} className="p-1 hover:bg-orange-100 rounded-full"><X size={20} /></button>
+                            <button onClick={() => setShowPendingFeedbackModal(false)} className="p-1 hover:bg-orange-200 rounded-full"><X size={20} /></button>
                         </div>
                         <div className="p-6">
                             {pendingByCatererLoading ? (
@@ -241,7 +241,7 @@ const AdminDashboard = () => {
                                 </div>
                             )}
                         </div>
-                        <div className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
+                        <div className="p-4 border-t bg-gray-100 rounded-b-xl flex justify-end">
                             <button onClick={() => setShowPendingFeedbackModal(false)} className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-medium">Close</button>
                         </div>
                     </div>

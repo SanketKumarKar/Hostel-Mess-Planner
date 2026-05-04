@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
-import { Check, Calendar, Clock, Utensils, Megaphone } from 'lucide-react';
+import { Check, Calendar, Clock, Utensils, Megaphone, Sun, Moon, Coffee, Cookie } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { formatSlotLabel } from '../utils/menuSlots';
+import { formatSlotLabel, buildSlotOptions } from '../utils/menuSlots';
+import { getCurrentMealInfo, getMealLabel } from '../utils/mealTimeUtils';
 
 const StudentDashboard = () => {
     const { profile } = useAuth();
@@ -66,7 +67,7 @@ const StudentDashboard = () => {
 
     if (selectedSession.status === 'draft') {
         return (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-fade-in">
                 <SessionSwitcher />
                 {profile?.assigned_caterer_id && profile?.mess_type && (<AnnouncementsPanel catererId={profile.assigned_caterer_id} messType={profile.mess_type} />)}
                 <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden text-center">
@@ -91,7 +92,7 @@ const StudentDashboard = () => {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in">
             <SessionSwitcher />
             <div className="bg-gradient-to-r from-primary to-secondary rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden">
                 <div className="relative z-10">
@@ -117,7 +118,16 @@ const StudentDashboard = () => {
                 </div>
             </div>
             {profile?.assigned_caterer_id && profile?.mess_type && (<AnnouncementsPanel catererId={profile.assigned_caterer_id} messType={profile.mess_type} />)}
-            {selectedSession.status === 'finalized' ? (<FinalMenuDisplay session={selectedSession} />) : (<VotingInterface session={selectedSession} onEditProfile={() => setShowProfileEdit(true)} />)}
+            {selectedSession.status === 'finalized' ? (
+                <>
+                    <TodayMenuHighlight session={selectedSession} />
+                    <div className="flex justify-center mt-6">
+                        <button onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/generate-pdf/${selectedSession.id}/${profile.mess_type}`, '_blank')} className="bg-primary text-white py-2.5 px-6 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-md flex items-center gap-2">
+                            <Utensils size={18} /> Download Full Menu PDF
+                        </button>
+                    </div>
+                </>
+            ) : (<VotingInterface session={selectedSession} onEditProfile={() => setShowProfileEdit(true)} />)}
             {showProfileEdit && <ProfileEditor onClose={() => setShowProfileEdit(false)} />}
         </div>
     );
@@ -260,41 +270,122 @@ const VotingInterface = ({ session, onEditProfile }) => {
     );
 };
 
-const FinalMenuDisplay = ({ session }) => {
+const TodayMenuHighlight = ({ session }) => {
     const { profile } = useAuth();
-    const [items, setItems] = useState([]);
+    const [todayItems, setTodayItems] = useState({});
     const [loading, setLoading] = useState(true);
+    const [activeMeal, setActiveMeal] = useState(() => getCurrentMealInfo().mealType);
+    const mealInfo = getCurrentMealInfo();
 
-    useEffect(() => { if (!profile?.mess_type) return; supabase.from('menu_items').select('*').eq('session_id', session.id).is('is_selected', true).eq('mess_type', profile.mess_type).order('date_served', { ascending: true }).order('meal_type', { ascending: true }).then(({ data }) => { setItems(data || []); setLoading(false); }); }, [session.id, profile?.mess_type]);
+    useEffect(() => {
+        if (!profile?.mess_type || !session) return;
+        const fetchToday = async () => {
+            try {
+                const slots = buildSlotOptions(session.session_weeks);
+                const todayDayIndex = new Date().getDay();
+                const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                const todayName = dayNames[todayDayIndex];
 
-    if (loading) return <div className="text-center py-10">Loading final menu...</div>;
-    if (items.length === 0) return <div className="text-center py-10 text-gray-500">No items finalized for {profile?.mess_type?.replace('_', ' ')} mess yet.</div>;
+                const matchingSlots = slots.filter(s => {
+                    const slotDate = new Date(`${s.value}T00:00:00`);
+                    return slotDate.toLocaleDateString('en-US', { weekday: 'long' }) === todayName;
+                });
 
-    const grouped = items.reduce((acc, item) => { const date = item.date_served; if (!acc[date]) acc[date] = {}; if (!acc[date][item.meal_type]) acc[date][item.meal_type] = []; acc[date][item.meal_type].push(item); return acc; }, {});
+                if (matchingSlots.length === 0) { setLoading(false); return; }
+
+                const slotDates = matchingSlots.map(s => s.value);
+                const { data: items } = await supabase
+                    .from('menu_items')
+                    .select('*')
+                    .eq('session_id', session.id)
+                    .is('is_selected', true)
+                    .eq('mess_type', profile.mess_type)
+                    .in('date_served', slotDates)
+                    .order('meal_type', { ascending: true });
+
+                const grouped = {};
+                (items || []).forEach(item => {
+                    if (!grouped[item.meal_type]) grouped[item.meal_type] = [];
+                    grouped[item.meal_type].push(item);
+                });
+                setTodayItems(grouped);
+            } catch (err) {
+                console.error('Error fetching today menu:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchToday();
+    }, [session, profile?.mess_type]);
+
+    if (loading) return null;
+    const mealKeys = Object.keys(todayItems);
+    if (mealKeys.length === 0) return null;
+
+    const mealIcons = { breakfast: Coffee, lunch: Sun, snacks: Cookie, dinner: Moon };
+    const mealOrder = ['breakfast', 'lunch', 'snacks', 'dinner'];
+    const activeItems = todayItems[activeMeal] || [];
 
     return (
-        <div className="space-y-8 animate-fade-in">
-            {Object.entries(grouped).map(([date, meals]) => (
-                <div key={date}>
-                    <h3 className="text-xl font-bold text-gray-800 mb-4 sticky top-20 bg-background/95 backdrop-blur py-2 z-10 border-b flex items-center gap-2">
-                        {formatSlotLabel(date, session.session_weeks, 'long')}
-                        <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full uppercase">Final</span>
-                    </h3>
-                    <div className="grid gap-6">
-                        {['breakfast', 'lunch', 'snacks', 'dinner'].map((mealType) => { const options = meals[mealType]; if (!options?.length) return null; return (
-                            <div key={mealType} className="bg-white rounded-xl shadow-sm border border-green-100 p-6 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-4 opacity-10"><Check size={100} /></div>
-                                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 relative z-10">{mealType}</h4>
-                                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
-                                    {options.map((item) => (<div key={item.id} className="p-4 rounded-lg bg-green-50/50 border border-green-100"><h5 className="font-bold text-gray-900 mb-1">{item.name}</h5><p className="text-sm text-gray-600">{item.description}</p></div>))}
-                                </div>
+        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 p-3 sm:p-5 shadow-sm">
+            {/* Header */}
+            <div className="flex items-center gap-2 mb-3">
+                <div className="bg-emerald-100 p-1.5 rounded-lg shrink-0"><Utensils size={16} className="text-emerald-600 sm:w-[18px] sm:h-[18px]" /></div>
+                <div className="min-w-0">
+                    <h3 className="font-bold text-emerald-900 text-sm sm:text-base">Today's Menu — {mealInfo.day}</h3>
+                    <p className="text-[10px] sm:text-xs text-emerald-600">Tap a meal to view items</p>
+                </div>
+            </div>
+
+            {/* Meal Tabs */}
+            <div className="flex gap-1 sm:gap-1.5 mb-3">
+                {mealOrder.map(meal => {
+                    const IconComp = mealIcons[meal] || Utensils;
+                    const hasItems = todayItems[meal] && todayItems[meal].length > 0;
+                    const isActive = meal === activeMeal;
+                    const isNow = meal === mealInfo.mealType;
+                    return (
+                        <button
+                            key={meal}
+                            onClick={() => setActiveMeal(meal)}
+                            disabled={!hasItems}
+                            className={`flex-1 py-1.5 sm:py-2 px-1 sm:px-2 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 relative ${
+                                isActive
+                                    ? 'bg-emerald-500 text-white shadow-md'
+                                    : hasItems
+                                        ? 'bg-white/80 text-gray-600 hover:bg-white border border-emerald-100'
+                                        : 'bg-gray-100/50 text-gray-300 cursor-not-allowed'
+                            }`}
+                        >
+                            <IconComp size={12} className="sm:w-[14px] sm:h-[14px]" />
+                            <span>{meal}</span>
+                            {isNow && hasItems && (
+                                <span className={`absolute -top-1 -right-1 text-[8px] px-1 py-0.5 rounded-full font-bold ${isActive ? 'bg-white text-emerald-600' : 'bg-emerald-500 text-white'}`}>NOW</span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Active Meal Items */}
+            {activeItems.length > 0 ? (
+                <div className="max-h-56 sm:max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5 sm:gap-2">
+                        {activeItems.map(item => (
+                            <div key={item.id} className="bg-white/90 border border-emerald-100 rounded-lg p-2 sm:p-2.5 h-full">
+                                <p className="text-xs sm:text-sm font-medium text-gray-800 leading-tight">{item.name}</p>
+                                {item.description && <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 line-clamp-2">{item.description}</p>}
                             </div>
-                        ); })}
+                        ))}
                     </div>
                 </div>
-            ))}
+            ) : (
+                <p className="text-xs text-gray-400 text-center py-3">No items for {activeMeal}</p>
+            )}
         </div>
     );
 };
+
+
 
 export default StudentDashboard;

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { Plus, X, Trash2, MessageSquare, Check, Settings, Sparkles, Loader2, Megaphone, Bell } from 'lucide-react';
+import { Plus, X, Trash2, MessageSquare, Check, Settings, Sparkles, Loader2, Megaphone, Bell, RefreshCw, Utensils, Eye } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { buildSlotOptions, formatSlotLabel } from '../utils/menuSlots';
+import { getCurrentMealInfo } from '../utils/mealTimeUtils';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -26,13 +27,14 @@ const CatererDashboard = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">Caterer Dashboard</h2>
                 <div className="flex gap-2">
                     <button onClick={() => setShowSettings(true)} className="px-4 py-2 rounded-lg font-medium transition-colors text-gray-600 hover:bg-gray-100 border border-gray-200 flex items-center gap-2"><Settings size={18} />Profile Settings</button>
                     <button onClick={() => setActiveTab('menus')} className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'menus' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Menu Planning</button>
                     <button onClick={() => setActiveTab('announcements')} className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${activeTab === 'announcements' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Megaphone size={16} />Announcements</button>
+                    <button onClick={() => setActiveTab('daily_feedback')} className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${activeTab === 'daily_feedback' ? 'bg-amber-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Utensils size={16} />Today's Feedback</button>
                     <button onClick={() => setActiveTab('feedback')} className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'feedback' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Feedbacks</button>
                 </div>
             </div>
@@ -53,7 +55,7 @@ const CatererDashboard = () => {
                         ))}
                     </div>
                 )
-            ) : activeTab === 'announcements' ? (<AnnouncementManager />) : (<FeedbackManager />)}
+            ) : activeTab === 'announcements' ? (<AnnouncementManager />) : activeTab === 'daily_feedback' ? (<DailyFeedbackPanel />) : (<FeedbackManager />)}
 
             {selectedSession && (<MenuEditor session={selectedSession} onClose={() => setSelectedSession(null)} />)}
             {showSettings && <CatererProfileSettings onClose={() => setShowSettings(false)} />}
@@ -305,6 +307,164 @@ const FeedbackManager = () => {
                     )}
                 </div>
             ))}
+        </div>
+    );
+};
+
+const DailyFeedbackPanel = () => {
+    const { profile } = useAuth();
+    const defaultMealInfo = getCurrentMealInfo();
+    const [selectedMeal, setSelectedMeal] = useState(defaultMealInfo.mealType);
+    const [selectedDate, setSelectedDate] = useState(defaultMealInfo.date);
+    const [summary, setSummary] = useState(null);
+    const [feedbacks, setFeedbacks] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [feedbackCount, setFeedbackCount] = useState(0);
+    const [expandedImage, setExpandedImage] = useState(null);
+
+    const mealTypes = [
+        { value: 'breakfast', label: '🌅 Breakfast' },
+        { value: 'lunch', label: '☀️ Lunch' },
+        { value: 'snacks', label: '🍪 Snacks' },
+        { value: 'dinner', label: '🌙 Dinner' },
+    ];
+
+    const fetchDailyFeedback = async () => {
+        if (!profile?.id) return;
+        setLoading(true);
+        setSummary(null);
+        setFeedbacks([]);
+        try {
+            // Fetch feedbacks on the authenticated client first (bypasses Server RLS limitation)
+            const { data: rawFeedbacks, error } = await supabase
+                .from('feedbacks')
+                .select('*, student:profiles!student_id(full_name, reg_number)')
+                .eq('caterer_id', profile.id)
+                .eq('feedback_type', 'daily_food')
+                .eq('feedback_date', selectedDate)
+                .eq('meal_type', selectedMeal)
+                .order('created_at', { ascending: false });
+                
+            if (error) throw error;
+
+            const res = await axios.post(`${API_URL}/api/ai/summarize-daily-feedback`, {
+                catererId: profile.id,
+                date: selectedDate,
+                mealType: selectedMeal,
+                feedbacks: rawFeedbacks || [], // Pass the array of feedbacks to the server
+            });
+            setSummary(res.data.summary);
+            setFeedbacks(res.data.feedbacks || []);
+            setFeedbackCount(res.data.feedbackCount || 0);
+        } catch (err) {
+            console.error('Error fetching daily feedback:', err);
+            toast.error('Failed to fetch feedback summary');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const dayLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+
+    return (
+        <div className="space-y-6 animate-fade-in">
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-5 sm:p-6 text-white shadow-lg">
+                <h3 className="text-xl font-bold mb-1 flex items-center gap-2"><Utensils size={22} />Today's Food Feedback</h3>
+                <p className="text-sm opacity-90">AI-powered summary of student feedback with improvement suggestions for each meal.</p>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-5">
+                <div className="flex flex-col sm:flex-row gap-4 items-end">
+                    <div className="flex-1">
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Date</label>
+                        <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-300 outline-none" />
+                    </div>
+                    <div className="flex-1">
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Meal</label>
+                        <div className="flex gap-1.5">
+                            {mealTypes.map(m => (
+                                <button key={m.value} onClick={() => setSelectedMeal(m.value)} className={`flex-1 py-2 px-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${selectedMeal === m.value ? 'bg-amber-500 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                                    {m.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <button onClick={fetchDailyFeedback} disabled={loading} className="bg-amber-500 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-amber-600 disabled:opacity-50 flex items-center gap-2 transition-colors shadow-md whitespace-nowrap">
+                        {loading ? <><Loader2 size={16} className="animate-spin" /> Analyzing...</> : <><RefreshCw size={16} /> Get Feedback</>}
+                    </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-3">Showing: <strong>{dayLabel}</strong> &bull; <strong className="capitalize">{selectedMeal}</strong></p>
+            </div>
+
+            {summary && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-5 py-3 border-b border-indigo-100 flex items-center justify-between">
+                        <h4 className="font-bold text-indigo-800 flex items-center gap-2"><Sparkles size={16} className="text-indigo-500" />AI Feedback Summary</h4>
+                        <span className="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-medium">{feedbackCount} response{feedbackCount !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="p-5">
+                        <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap leading-relaxed">
+                            {summary.split('\n').map((line, i) => {
+                                if (line.startsWith('**') && line.endsWith('**')) {
+                                    return <h5 key={i} className="font-bold text-gray-900 mt-4 mb-1">{line.replace(/\*\*/g, '')}</h5>;
+                                }
+                                if (line.startsWith('**')) {
+                                    const parts = line.split('**');
+                                    return <p key={i} className="mt-3 mb-1"><strong className="text-gray-900">{parts[1]}</strong>{parts[2]}</p>;
+                                }
+                                if (line.startsWith('- ')) {
+                                    return <p key={i} className="ml-4 text-gray-600 flex items-start gap-1.5"><span className="text-amber-500 mt-0.5">•</span>{line.slice(2)}</p>;
+                                }
+                                return line.trim() ? <p key={i}>{line}</p> : null;
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {feedbacks.length > 0 && (
+                <div className="space-y-3">
+                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Individual Student Feedback ({feedbacks.length})</h4>
+                    {feedbacks.map(fb => (
+                        <div key={fb.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                            <div className="flex justify-between items-start mb-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-700 font-bold text-sm">{fb.studentName?.[0] || 'S'}</div>
+                                    <div>
+                                        <span className="font-semibold text-gray-800 text-sm">{fb.studentName}</span>
+                                        <span className="text-xs text-gray-400 ml-2">{fb.dayLabel} &bull; {fb.mealType}</span>
+                                    </div>
+                                </div>
+                                <span className="text-xs text-gray-400">{new Date(fb.createdAt).toLocaleTimeString()}</span>
+                            </div>
+                            <p className="text-gray-700 text-sm bg-gray-50 p-3 rounded-lg border border-gray-100">&ldquo;{fb.message}&rdquo;</p>
+                            {fb.imageUrl && (
+                                <div className="mt-3 flex items-center gap-3">
+                                    <img src={fb.imageUrl} alt="Food" className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:scale-105 transition-transform" onClick={() => setExpandedImage(fb.imageUrl)} />
+                                    <button onClick={() => setExpandedImage(fb.imageUrl)} className="text-xs text-primary flex items-center gap-1 hover:underline"><Eye size={14} />View full image</button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {!loading && !summary && (
+                <div className="text-center py-16 bg-white rounded-xl border border-gray-100">
+                    <Utensils size={48} className="mx-auto text-gray-200 mb-4" />
+                    <p className="text-gray-500 font-medium">Select a date and meal, then click &quot;Get Feedback&quot;</p>
+                    <p className="text-gray-400 text-sm mt-1">AI will analyze student feedback and provide improvement suggestions</p>
+                </div>
+            )}
+
+            {expandedImage && (
+                <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setExpandedImage(null)}>
+                    <div className="relative max-w-2xl max-h-[80vh]">
+                        <img src={expandedImage} alt="Food" className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl" />
+                        <button onClick={() => setExpandedImage(null)} className="absolute -top-3 -right-3 bg-white text-gray-800 p-1.5 rounded-full shadow-lg hover:bg-gray-100 transition-colors"><X size={18} /></button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

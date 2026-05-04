@@ -58,7 +58,7 @@ const EventsPage = () => {
     if (loading) return <div className="p-8 text-center text-gray-500">Loading events...</div>;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in">
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-800">Upcoming Events</h2>
                 {isAdmin && (

@@ -22,3 +22,10 @@ build/
 coverage/
 *.log
 NUL
+
+# Graphify
+.graphify/
+graphify/
+
+# Agents
+.agents/

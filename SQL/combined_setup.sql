@@ -115,8 +115,23 @@ CREATE TABLE IF NOT EXISTS public.feedbacks (
   caterer_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
   message text NOT NULL,
   response text, -- NULL = Pending, Not NULL = Responded
+  meal_type text,            -- 'breakfast', 'lunch', 'snacks', 'dinner' (daily_food only)
+  feedback_date date,        -- The date this feedback is for (daily_food only)
+  day_label text,            -- Day name e.g. 'Monday' (display purposes)
+  image_url text,            -- Optional image URL uploaded via imgbb
+  feedback_type text DEFAULT 'general', -- 'general' or 'daily_food'
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Safe migration for existing tables
+ALTER TABLE public.feedbacks ADD COLUMN IF NOT EXISTS meal_type text;
+ALTER TABLE public.feedbacks ADD COLUMN IF NOT EXISTS feedback_date date;
+ALTER TABLE public.feedbacks ADD COLUMN IF NOT EXISTS day_label text;
+ALTER TABLE public.feedbacks ADD COLUMN IF NOT EXISTS image_url text;
+ALTER TABLE public.feedbacks ADD COLUMN IF NOT EXISTS feedback_type text DEFAULT 'general';
+
+CREATE INDEX IF NOT EXISTS idx_feedbacks_daily
+  ON public.feedbacks (caterer_id, feedback_type, feedback_date, meal_type);
 
 -- SYSTEM SETTINGS
 CREATE TABLE IF NOT EXISTS public.system_settings (
