@@ -177,8 +177,8 @@ const Layout = () => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
                     <div className="flex items-center gap-8">
                         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-                            <img src="/logo.png" alt="Hostel Mess Logo" className="h-8 w-8 sm:h-10 sm:w-10 object-contain" />
-                            <h1 className="text-lg sm:text-xl font-bold text-primary truncate max-w-[150px] sm:max-w-none">Hostel Menu</h1>
+                            <img src="/FeastFull_LOGO.png" alt="FeastFull Logo" className="h-8 w-8 sm:h-10 sm:w-10 object-contain" />
+                            <h1 className="text-lg sm:text-xl font-bold text-primary truncate max-w-[150px] sm:max-w-none">FeastFull</h1>
                         </div>
                         <nav className="hidden md:flex gap-4">
                             <button onClick={() => navigate('/')} className="text-gray-600 hover:text-primary font-medium">Dashboard</button>

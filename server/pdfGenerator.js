@@ -33,13 +33,20 @@ const generateReport = (session, items, messType, res) => {
     doc.pipe(res);
 
     // -- Header with precise positioning --
-    const logoPath = path.join(__dirname, 'assets', 'vit-logo.png');
+    const vitLogoPath = path.join(__dirname, 'assets', 'vit-logo.png');
+    const feastFullLogoPath = path.join(__dirname, 'assets', 'FeastFull_LOGO.png');
     const logoWidth = 100;
+    const feastFullLogoWidth = 80;
     let headerY = 30;
 
-    if (fs.existsSync(logoPath)) {
-        const logoX = doc.page.width - 50 - logoWidth; // Top-right corner
-        doc.image(logoPath, logoX, headerY, { width: logoWidth });
+    if (fs.existsSync(vitLogoPath)) {
+        const vitLogoX = doc.page.width - 50 - logoWidth; // Top-right corner
+        doc.image(vitLogoPath, vitLogoX, headerY, { width: logoWidth });
+    }
+
+    if (fs.existsSync(feastFullLogoPath)) {
+        const feastFullLogoX = 50; // Top-left corner
+        doc.image(feastFullLogoPath, feastFullLogoX, headerY, { width: feastFullLogoWidth });
     }
 
     // University name

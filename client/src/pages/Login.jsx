@@ -180,7 +180,7 @@ const Login = () => {
         <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8 animate-fade-in">
             <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg">
                 <div className="flex justify-center mb-6">
-                    <img src="/logo.png" alt="Hostel Mess Logo" className="h-24 w-auto object-contain" />
+                    <img src="/FeastFull_LOGO.png" alt="FeastFull Logo" className="h-24 w-auto object-contain" />
                 </div>
 
                 {showConfirmation ? (
