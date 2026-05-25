@@ -16,6 +16,8 @@ const ProfileSetupModal = ({ profile, onComplete }) => {
     const [catererId, setCatererId] = useState('');
     const [caterers, setCaterers] = useState([]);
     const [saving, setSaving] = useState(false);
+    const [agreePrivacy, setAgreePrivacy] = useState(false);
+    const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
     // Fetch caterers matching the selected mess type
     useEffect(() => {
@@ -127,15 +129,76 @@ const ProfileSetupModal = ({ profile, onComplete }) => {
                         )}
                     </div>
 
+                    {/* Privacy Agreement */}
+                    <div className="flex items-start gap-2 mt-2">
+                        <input 
+                            type="checkbox" 
+                            id="setup-privacy" 
+                            checked={agreePrivacy}
+                            onChange={(e) => setAgreePrivacy(e.target.checked)}
+                            className="custom-checkbox mt-[5px] w-3.5 h-3.5 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1"
+                        />
+                        <label htmlFor="setup-privacy" className="text-sm text-gray-600">
+                            I agree to the <button type="button" onClick={() => setShowPrivacyModal(true)} className="text-primary hover:underline font-medium">Privacy Policy</button>
+                        </label>
+                    </div>
+
                     <button
                         type="submit"
-                        disabled={saving || !catererId}
+                        disabled={saving || !catererId || !agreePrivacy}
                         className="w-full py-3 bg-primary text-white rounded-lg font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 text-sm"
                     >
                         {saving ? 'Saving...' : 'Save & Continue'}
                     </button>
                 </form>
             </div>
+
+            {/* Privacy Policy Modal */}
+            {showPrivacyModal && (
+                <div className="fixed inset-0 bg-transparent backdrop-blur-sm z-[110] flex items-center justify-center p-4" onClick={() => setShowPrivacyModal(false)}>
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden border border-gray-100" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-center p-4 border-b bg-gray-50">
+                            <h2 className="text-lg font-bold text-gray-800">Privacy Policy</h2>
+                            <button onClick={() => setShowPrivacyModal(false)} className="p-1 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-gray-700">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto custom-scrollbar text-sm text-gray-600 space-y-4">
+                            <p>Welcome to FeastFull. We are committed to protecting your personal information and your right to privacy.</p>
+                            
+                            <h3 className="font-bold text-gray-800 text-base mt-4">1. Information We Collect</h3>
+                            <p>We collect personal information that you voluntarily provide to us when you register on the App, including your name, email address, roll number, and dietary preferences (such as mess type). We also collect data regarding your voting activity, feedback, and app usage.</p>
+                            
+                            <h3 className="font-bold text-gray-800 text-base mt-4">2. How We Use Your Information</h3>
+                            <p>We use personal information collected via our App for a variety of business purposes, including:</p>
+                            <ul className="list-disc pl-5 space-y-1">
+                                <li>To facilitate account creation and login process.</li>
+                                <li>To manage your orders, voting, and meal preferences.</li>
+                                <li>To improve our services and platform analytics.</li>
+                                <li>To send administrative information to you.</li>
+                            </ul>
+
+                            <h3 className="font-bold text-gray-800 text-base mt-4">3. Will Your Information Be Shared?</h3>
+                            <p>We only share and disclose your information in the following situations:</p>
+                            <ul className="list-disc pl-5 space-y-1">
+                                <li><strong>Caterers:</strong> Your assigned caterer may see your feedback and meal preferences to improve food quality.</li>
+                                <li><strong>Administrators:</strong> App admins have access to user lists for management and security purposes.</li>
+                                <li><strong>Legal Obligations:</strong> If required by law, we may disclose your information.</li>
+                            </ul>
+
+                            <h3 className="font-bold text-gray-800 text-base mt-4">4. Security of Your Information</h3>
+                            <p>We use administrative, technical, and physical security measures to help protect your personal information (powered by Supabase). While we have taken reasonable steps to secure the personal information you provide to us, please be aware that despite our efforts, no security measures are perfect or impenetrable.</p>
+                            
+                            <p className="pt-4 text-xs text-gray-400">By using FeastFull, you agree to this Privacy Policy.</p>
+                        </div>
+                        <div className="p-4 border-t bg-gray-50 flex justify-end">
+                            <button onClick={() => setShowPrivacyModal(false)} className="px-5 py-2 bg-primary text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+                                I Understand
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -513,7 +513,33 @@ body {
 }
 
 @media (min-width: 641px) {
-  .show-on-mobile {
-    display: none;
-  }
 }
+
+/* Custom Checkbox */
+.custom-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.custom-checkbox:checked {
+  background-color: #0d9488;
+  border-color: #0d9488;
+}
+
+.custom-checkbox:checked::after {
+  content: '';
+  display: block;
+  width: 35%;
+  height: 55%;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translate(-5%, -15%);
+}
