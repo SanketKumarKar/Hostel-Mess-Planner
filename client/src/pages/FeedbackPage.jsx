@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import axios from 'axios';
 import { getCurrentMealInfo, getMealLabel, MEAL_TYPES } from '../utils/mealTimeUtils';
 import { buildSlotOptions } from '../utils/menuSlots';
+import CustomSelect from '../components/CustomSelect';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -387,10 +388,12 @@ const GeneralFeedback = () => {
                 <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
                     <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Select Caterer</label>
-                        <select value={selectedCaterer} onChange={(e) => setSelectedCaterer(e.target.value)} className="w-full rounded-lg border-gray-300 focus:ring-primary focus:border-primary p-2 sm:p-2.5 bg-gray-50 hover:bg-white transition-colors border text-sm" required>
-                            <option value="">-- Choose a Caterer --</option>
-                            {caterers.map(c => (<option key={c.id} value={c.id}>{c.full_name}</option>))}
-                        </select>
+                        <CustomSelect 
+                            value={selectedCaterer} 
+                            onChange={(val) => setSelectedCaterer(val)} 
+                            options={caterers.map(c => ({ value: c.id, label: c.full_name }))}
+                            placeholder="-- Choose a Caterer --"
+                        />
                     </div>
                     <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Your Message</label>

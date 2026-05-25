@@ -58,6 +58,7 @@ const EventsPage = () => {
     if (loading) return <div className="p-8 text-center text-gray-500">Loading events...</div>;
 
     return (
+        <>
         <div className="space-y-6 animate-fade-in">
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-800">Upcoming Events</h2>
@@ -67,39 +68,6 @@ const EventsPage = () => {
                     </button>
                 )}
             </div>
-
-            {showCreate && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in">
-                        <div className="p-6 border-b flex justify-between items-center">
-                            <h3 className="text-lg font-bold">Create New Event</h3>
-                            <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
-                        </div>
-                        <form onSubmit={handleCreate} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Event Title</label>
-                                <input required type="text" className="w-full px-3 py-2 border rounded-lg" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Hostel Night 2024" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
-                                <input required type="datetime-local" className="w-full px-3 py-2 border rounded-lg" value={date} onChange={e => setDate(e.target.value)} />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                                <input required type="text" className="w-full px-3 py-2 border rounded-lg" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Main Auditorium" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                                <textarea required className="w-full px-3 py-2 border rounded-lg h-24" value={description} onChange={e => setDescription(e.target.value)} placeholder="Event details..." />
-                            </div>
-                            <div className="pt-4 flex gap-3">
-                                <button type="button" onClick={() => setShowCreate(false)} className="flex-1 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-                                <button type="submit" className="flex-1 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700">Create Event</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
 
             {events.length === 0 ? (
                 <div className="text-center py-20 bg-white rounded-2xl shadow-sm">
@@ -146,6 +114,40 @@ const EventsPage = () => {
                 </div>
             )}
         </div>
+
+        {showCreate && (
+            <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center z-40 p-4">
+                <div className="bg-white/80 backdrop-blur-xl rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in border border-white/50">
+                    <div className="p-6 border-b flex justify-between items-center">
+                        <h3 className="text-lg font-bold">Create New Event</h3>
+                        <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
+                    </div>
+                    <form onSubmit={handleCreate} className="p-6 space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Event Title</label>
+                            <input required type="text" className="w-full px-3 py-2 border rounded-lg" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Hostel Night 2024" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
+                            <input required type="datetime-local" className="w-full px-3 py-2 border rounded-lg" value={date} onChange={e => setDate(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                            <input required type="text" className="w-full px-3 py-2 border rounded-lg" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Main Auditorium" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea required className="w-full px-3 py-2 border rounded-lg h-24" value={description} onChange={e => setDescription(e.target.value)} placeholder="Event details..." />
+                        </div>
+                        <div className="pt-4 flex gap-3">
+                            <button type="button" onClick={() => setShowCreate(false)} className="flex-1 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+                            <button type="submit" className="flex-1 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700">Create Event</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        )}
+        </>
     );
 };
 

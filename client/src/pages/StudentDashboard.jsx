@@ -5,6 +5,7 @@ import { Check, Calendar, Clock, Utensils, Megaphone, Sun, Moon, Coffee, Cookie 
 import toast from 'react-hot-toast';
 import { formatSlotLabel, buildSlotOptions } from '../utils/menuSlots';
 import { getCurrentMealInfo, getMealLabel } from '../utils/mealTimeUtils';
+import CustomSelect from '../components/CustomSelect';
 
 const StudentDashboard = () => {
     const { profile } = useAuth();
@@ -46,27 +47,43 @@ const StudentDashboard = () => {
 
     if (!selectedSession) {
         return (
+            <>
             <div className="text-center py-20">
                 <h2 className="text-2xl font-bold text-gray-800 mb-2">No Active Voting Sessions</h2>
                 <p className="text-gray-500">There are currently no menus open for voting. Check back later!</p>
                 {profile?.role === 'student' && (<button onClick={() => setShowProfileEdit(true)} className="mt-4 text-primary hover:underline">Wrong Mess Type? Change it here.</button>)}
-                {showProfileEdit && <ProfileEditor onClose={() => setShowProfileEdit(false)} />}
             </div>
+            {showProfileEdit && <ProfileEditor onClose={() => setShowProfileEdit(false)} />}
+            </>
         );
     }
 
-    const SessionSwitcher = () => (
-        sessions.length > 1 ? (
-            <div className="mb-6 flex justify-end">
-                <select value={selectedSession.id} onChange={(e) => { const s = sessions.find(s => s.id === e.target.value); if (s) setSelectedSession(s); }} className="block pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md shadow-sm bg-white">
-                    {sessions.map(s => (<option key={s.id} value={s.id}>{s.title} {s.week_label ? `[${s.week_label === 'week1' ? 'Week 1' : 'Week 2'}]` : ''} ({s.status.replace('_', ' ')})</option>))}
-                </select>
+    const SessionSwitcher = () => {
+        const getShortStatus = (status) => {
+            if (status === 'open_for_voting') return 'Voting';
+            if (status === 'finalized') return 'Final';
+            return status;
+        };
+        const formatTitle = (title) => title.length > 20 ? title.substring(0, 20) + '...' : title;
+        
+        return sessions.length > 1 ? (
+            <div className="mb-6 flex justify-end w-full">
+                <CustomSelect
+                    value={selectedSession.id}
+                    onChange={(val) => { const s = sessions.find(s => s.id === val); if (s) setSelectedSession(s); }}
+                    options={sessions.map(s => ({
+                        value: s.id,
+                        label: `${formatTitle(s.title)} ${s.week_label ? `[${s.week_label === 'week1' ? 'W1' : 'W2'}]` : ''} (${getShortStatus(s.status)})`
+                    }))}
+                    className="w-full sm:w-72"
+                />
             </div>
-        ) : null
-    );
+        ) : null;
+    };
 
     if (selectedSession.status === 'draft') {
         return (
+            <>
             <div className="space-y-6 animate-fade-in">
                 <SessionSwitcher />
                 {profile?.assigned_caterer_id && profile?.mess_type && (<AnnouncementsPanel catererId={profile.assigned_caterer_id} messType={profile.mess_type} />)}
@@ -86,12 +103,14 @@ const StudentDashboard = () => {
                     </div>
                 </div>
                 {profile?.role === 'student' && (<div className="text-center mt-4"><p className="text-gray-600 mb-2">Current Mess: <span className="font-bold capitalize">{profile.mess_type?.replace('_', ' ') || 'Not Set'}</span></p><button onClick={() => setShowProfileEdit(true)} className="text-primary hover:text-indigo-700 text-sm font-medium hover:underline">Update Mess Type Preference</button></div>)}
-                {showProfileEdit && <ProfileEditor onClose={() => setShowProfileEdit(false)} />}
             </div>
+            {showProfileEdit && <ProfileEditor onClose={() => setShowProfileEdit(false)} />}
+            </>
         );
     }
 
     return (
+        <>
         <div className="space-y-6 animate-fade-in">
             <SessionSwitcher />
             <div className="bg-gradient-to-r from-primary to-secondary rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden">
@@ -128,8 +147,9 @@ const StudentDashboard = () => {
                     </div>
                 </>
             ) : (<VotingInterface session={selectedSession} onEditProfile={() => setShowProfileEdit(true)} />)}
-            {showProfileEdit && <ProfileEditor onClose={() => setShowProfileEdit(false)} />}
         </div>
+            {showProfileEdit && <ProfileEditor onClose={() => setShowProfileEdit(false)} />}
+        </>
     );
 };
 
@@ -182,8 +202,8 @@ const ProfileEditor = ({ onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm animate-fade-in">
+        <div className="fixed inset-0 bg-transparent backdrop-blur-md z-40 flex items-center justify-center p-4">
+            <div className="bg-white/80 backdrop-blur-xl rounded-xl shadow-xl p-6 w-full max-w-sm animate-fade-in border border-white/50">
                 <h3 className="text-lg font-bold mb-4">Update Profile Preferences</h3>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Select Mess Type</label>
                 <div className="space-y-3 mb-5">
@@ -191,7 +211,13 @@ const ProfileEditor = ({ onClose }) => {
                 </div>
                 <div className="mb-6">
                     <label className="block text-sm font-bold text-gray-700 mb-2">Select Your Caterer</label>
-                    <select value={catererId} onChange={e => setCatererId(e.target.value)} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none bg-white" disabled={caterers.length === 0}><option value="" disabled>Choose a Caterer...</option>{caterers.map(cat => (<option key={cat.id} value={cat.id}>{cat.full_name}</option>))}</select>
+                    <CustomSelect
+                        value={catererId}
+                        onChange={(val) => setCatererId(val)}
+                        options={caterers.map(cat => ({ value: cat.id, label: cat.full_name }))}
+                        placeholder="Choose a Caterer..."
+                        disabled={caterers.length === 0}
+                    />
                     {caterers.length === 0 && (<p className="text-xs text-red-500 mt-1">No caterers serving {messType.replace('_', ' ')}. Contact admin.</p>)}
                 </div>
                 <div className="flex gap-3"><button onClick={onClose} className="flex-1 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button><button onClick={handleUpdate} disabled={updating || !catererId} className="flex-1 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">{updating ? 'Saving...' : 'Save Update'}</button></div>

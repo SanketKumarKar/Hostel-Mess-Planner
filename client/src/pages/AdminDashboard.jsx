@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Plus, Trash, PlayCircle, StopCircle, Check, Settings, MessageSquare, Users, UserCog, UserX, Sparkles, Loader2, X, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Check, X, Clock, PlayCircle, StopCircle, RefreshCw, AlertCircle, TrendingUp, Calendar, Trash, Trash2, ArrowRight, Settings, MessageSquare, Users, UserCog, UserX, Sparkles, Loader2, XCircle, CheckCircle } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import CustomSelect from '../components/CustomSelect';
 import Papa from 'papaparse';
 import { buildSlotOptions, formatSlotLabel, getTotalSlots } from '../utils/menuSlots';
 
@@ -117,6 +118,7 @@ const AdminDashboard = () => {
     };
 
     return (
+        <>
         <div className="space-y-6 animate-fade-in">
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-800">Admin Dashboard</h2>
@@ -151,12 +153,12 @@ const AdminDashboard = () => {
             {activeTab === 'sessions' ? (
                 <>
                     {showCreate && (
-                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6 animate-fade-in">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6 animate-fade-in relative z-20">
                             <h3 className="font-semibold text-gray-800">Create New Voting Session</h3>
                             <p className="text-sm text-gray-500 mb-4">Sessions start in <strong>Draft</strong> mode so caterers can plan the menu before admin approves items.</p>
                             <form onSubmit={createSession} className="flex flex-col md:flex-row gap-4 items-end flex-wrap">
                                 <div className="flex-1 min-w-[180px]"><label className="block text-sm font-medium text-gray-700 mb-1">Title</label><input type="text" required placeholder="e.g. March Week 1" className="w-full px-3 py-2 border rounded-lg" value={title} onChange={e => setTitle(e.target.value)} /></div>
-                                <div className="w-full md:w-48"><label className="block text-sm font-medium text-gray-700 mb-1">Menu Cycle</label><select className="w-full px-3 py-2 border rounded-lg" value={sessionWeeks} onChange={e => setSessionWeeks(Number(e.target.value))}><option value={1}>1 Week (Mon-Sun)</option><option value={2}>2 Weeks (Mon Wk1 - Sun Wk2)</option></select></div>
+                                <div className="w-full md:w-48"><label className="block text-sm font-medium text-gray-700 mb-1">Menu Cycle</label><CustomSelect value={sessionWeeks} onChange={val => setSessionWeeks(Number(val))} options={[{value: 1, label: '1 Week (Mon-Sun)'}, {value: 2, label: '2 Weeks (Mon Wk1 - Sun Wk2)'}]} /></div>
                                 <div className="w-full md:w-44"><label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label><input type="date" required className="w-full px-3 py-2 border rounded-lg" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
                                 <div className="w-full md:w-44"><label className="block text-sm font-medium text-gray-700 mb-1">End Date</label><input type="date" required className="w-full px-3 py-2 border rounded-lg" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
                                 <div className="flex gap-2"><button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button><button type="submit" className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700">Create</button></div>
@@ -195,14 +197,15 @@ const AdminDashboard = () => {
             ) : (
                 <CatererManager />
             )}
+        </div>
 
             {finalizingSession && (<FinalizeMenuModal session={finalizingSession} onClose={() => { setFinalizingSession(null); fetchSessions(); }} />)}
             {editingSession && (<AdminMenuEditor session={editingSession} onClose={() => { setEditingSession(null); fetchSessions(); }} />)}
             {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
             {showSummaryModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg animate-scale-in">
+                <div className="fixed inset-0 bg-transparent backdrop-blur-md z-40 flex items-center justify-center p-4">
+                    <div className="bg-white/80 backdrop-blur-xl rounded-xl shadow-xl w-full max-w-lg animate-scale-in border border-white/50">
                         <div className="p-6 border-b bg-gradient-to-r from-indigo-500 to-purple-500 rounded-t-xl flex justify-between items-center">
                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Sparkles size={20} className="text-indigo-500" />AI Feedback Summary</h3>
                             <button onClick={() => setShowSummaryModal(false)} className="p-1 hover:bg-gray-200 rounded-full"><X size={20} /></button>
@@ -216,8 +219,8 @@ const AdminDashboard = () => {
             )}
 
             {showPendingFeedbackModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg animate-scale-in">
+                <div className="fixed inset-0 bg-transparent backdrop-blur-md z-40 flex items-center justify-center p-4">
+                    <div className="bg-white/80 backdrop-blur-xl rounded-xl shadow-xl w-full max-w-lg animate-scale-in border border-white/50">
                         <div className="p-6 border-b bg-orange-500 rounded-t-xl flex justify-between items-center">
                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><MessageSquare size={20} className="text-orange-500" />Pending Feedback To Address</h3>
                             <button onClick={() => setShowPendingFeedbackModal(false)} className="p-1 hover:bg-orange-200 rounded-full"><X size={20} /></button>
@@ -247,7 +250,7 @@ const AdminDashboard = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </>
     );
 };
 
@@ -357,8 +360,8 @@ const FinalizeMenuModal = ({ session, onClose }) => {
     const grouped = items.reduce((acc, item) => { const key = `${item.date_served} | ${item.mess_type}`; if (!acc[key]) acc[key] = []; acc[key].push(item); return acc; }, {});
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-scale-in">
+        <div className="fixed inset-0 bg-transparent backdrop-blur-md z-40 flex items-center justify-center p-4">
+            <div className="bg-white/80 backdrop-blur-xl rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-scale-in border border-white/50">
                 <div className="p-6 border-b flex justify-between items-start bg-gray-50 rounded-t-xl">
                     <div>
                         <h3 className="text-xl font-bold text-gray-800">Finalize Menu</h3>
@@ -456,8 +459,8 @@ const SettingsModal = ({ onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md animate-scale-in">
+        <div className="fixed inset-0 bg-transparent backdrop-blur-md z-40 flex items-center justify-center p-4">
+            <div className="bg-white/80 backdrop-blur-xl rounded-xl shadow-xl w-full max-w-md animate-scale-in border border-white/50">
                 <div className="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-xl"><h3 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Settings size={20} />System Settings</h3></div>
                 <div className="p-6 space-y-6">
                     {loading ? <div>Loading...</div> : (
@@ -819,8 +822,8 @@ const AdminMenuEditor = ({ session, onClose }) => {
     const groupedItems = items.reduce((acc, item) => { const d = item.date_served; if (!acc[d]) acc[d] = {}; if (!acc[d][item.meal_type]) acc[d][item.meal_type] = []; acc[d][item.meal_type].push(item); return acc; }, {});
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
-            <div className="bg-white w-full max-w-4xl h-full shadow-xl flex flex-col animate-slide-in-right overflow-hidden">
+        <div className="fixed inset-0 bg-transparent backdrop-blur-md z-40 flex justify-end" onClick={onClose}>
+            <div className="bg-white/80 backdrop-blur-xl w-full max-w-4xl h-full shadow-xl flex flex-col animate-slide-in-right overflow-hidden border-l border-white/50" onClick={(e) => e.stopPropagation()}>
                 <div className="p-6 border-b flex justify-between items-center bg-gray-50 flex-shrink-0">
                     <div>
                         <h3 className="text-xl font-bold text-gray-800">Admin Menu Editor</h3>
@@ -846,20 +849,27 @@ const AdminMenuEditor = ({ session, onClose }) => {
                             <div className="space-y-3.5">
                                 <div>
                                     <label className="block text-xs font-bold tracking-wide text-indigo-900 uppercase mb-1.5">Target Mess Type</label>
-                                    <select className="w-full bg-white px-3 py-2.5 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-300 outline-none text-sm" value={messType} onChange={(e) => setMessType(e.target.value)}>
-                                        <option value="veg">Veg</option><option value="non_veg">Non-Veg</option><option value="special">Special</option><option value="food_park">Food Park</option>
-                                    </select>
+                                    <CustomSelect 
+                                        value={messType} 
+                                        onChange={(val) => setMessType(val)} 
+                                        options={[
+                                            { value: 'veg', label: 'Veg' },
+                                            { value: 'non_veg', label: 'Non-Veg' },
+                                            { value: 'special', label: 'Special' },
+                                            { value: 'food_park', label: 'Food Park' }
+                                        ]}
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold tracking-wide text-indigo-900 uppercase mb-1.5">Distribution Mode</label>
-                                    <select
-                                        className="w-full bg-white px-3 py-2.5 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-300 outline-none text-sm"
+                                    <CustomSelect
                                         value={distributionMode}
-                                        onChange={(e) => setDistributionMode(e.target.value)}
-                                    >
-                                        <option value="equal">Distribute Equally (round-robin by day)</option>
-                                        <option value="min-config">Minimum Per Day Configuration</option>
-                                    </select>
+                                        onChange={(val) => setDistributionMode(val)}
+                                        options={[
+                                            { value: 'equal', label: 'Distribute Equally (round-robin by day)' },
+                                            { value: 'min-config', label: 'Minimum Per Day Configuration' }
+                                        ]}
+                                    />
                                 </div>
                                 {distributionMode === 'min-config' && (
                                     <div className="grid grid-cols-2 gap-2.5">
@@ -924,23 +934,27 @@ const AdminMenuEditor = ({ session, onClose }) => {
                             {deletedCsvItems.length > 0 && (
                                 <div className="mb-4 bg-amber-50 p-3 rounded-lg border border-amber-200">
                                     <label className="block text-xs font-bold text-amber-800 uppercase mb-1">Recover Unallocated Item</label>
-                                    <select onChange={handleSelectRecoveredItem} value={pendingRecoveryId || ''} className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm outline-none bg-white font-medium text-gray-800">
-                                        <option value="">-- Select an item to schedule --</option>
-                                        {deletedCsvItems.map(i => <option key={i.id} value={i.id}>{i.name} ({i.meal_type})</option>)}
-                                    </select>
+                                    <CustomSelect 
+                                        onChange={(val) => handleSelectRecoveredItem({ target: { value: val } })} 
+                                        value={pendingRecoveryId || ''} 
+                                        placeholder="-- Select an item to schedule --"
+                                        options={[{value: '', label: '-- Select an item to schedule --'}, ...deletedCsvItems.map(i => ({ value: i.id, label: `${i.name} (${i.meal_type})` }))]}
+                                    />
                                 </div>
                             )}
 
                             <form onSubmit={handleSubmit} className="space-y-3">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Target Date</label>
-                                    <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none text-sm" value={date} onChange={(e) => setDate(e.target.value)}>
-                                        {slotOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
-                                    </select>
+                                    <CustomSelect 
+                                        value={date} 
+                                        onChange={(val) => setDate(val)}
+                                        options={slotOptions.map(({ value, label }) => ({ value, label }))}
+                                    />
                                 </div>
                                 <div className="grid grid-cols-2 gap-3 mb-2">
-                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Meal</label><select className="w-full px-3 py-2 border rounded-lg outline-none text-sm" value={mealType} onChange={(e) => setMealType(e.target.value)}><option value="breakfast">Breakfast</option><option value="lunch">Lunch</option><option value="snacks">Snacks</option><option value="dinner">Dinner</option></select></div>
-                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Form</label><select className="w-full px-3 py-2 border rounded-lg outline-none text-sm" value={messType} onChange={(e) => setMessType(e.target.value)}><option value="veg">Veg</option><option value="non_veg">NVeg</option><option value="special">Spl</option><option value="food_park">Park</option></select></div>
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Meal</label><CustomSelect value={mealType} onChange={(val) => setMealType(val)} options={[{value:'breakfast', label:'Breakfast'},{value:'lunch', label:'Lunch'},{value:'snacks', label:'Snacks'},{value:'dinner', label:'Dinner'}]} /></div>
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Form</label><CustomSelect value={messType} onChange={(val) => setMessType(val)} options={[{value:'veg', label:'Veg'},{value:'non_veg', label:'NVeg'},{value:'special', label:'Spl'},{value:'food_park', label:'Park'}]} /></div>
                                 </div>
                                 <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Item Name</label><input type="text" required placeholder="e.g. Masala Dosa" className="w-full px-3 py-2 border rounded-lg outline-none text-sm" value={name} onChange={(e) => setName(e.target.value)} /></div>
                                 <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label><textarea placeholder="Ingredients, sides..." className="w-full px-3 py-2 border rounded-lg outline-none text-sm" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
@@ -1001,8 +1015,8 @@ const AdminMenuEditor = ({ session, onClose }) => {
                         )}
 
                         {confirmModal.open && (
-                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                                <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden animate-scale-in">
+                            <div className="fixed inset-0 z-40 flex items-center justify-center bg-transparent backdrop-blur-md p-4">
+                                <div className="w-full max-w-md rounded-2xl border border-white/50 bg-white/80 backdrop-blur-xl shadow-2xl overflow-hidden animate-scale-in">
                                     <div className="p-5 border-b bg-gradient-to-r from-red-50 to-rose-50">
                                         <h4 className="text-lg font-bold text-gray-900">
                                             {confirmModal.type === 'delete-all' ? 'Delete All Scheduled Items?' : confirmModal.type === 'remove-csv' ? 'Remove Uploaded CSV Items?' : 'Delete This Item?'}

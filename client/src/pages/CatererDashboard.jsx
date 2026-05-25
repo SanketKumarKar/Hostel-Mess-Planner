@@ -6,6 +6,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { buildSlotOptions, formatSlotLabel } from '../utils/menuSlots';
 import { getCurrentMealInfo } from '../utils/mealTimeUtils';
+import CustomSelect from '../components/CustomSelect';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -27,6 +28,7 @@ const CatererDashboard = () => {
     };
 
     return (
+        <>
         <div className="space-y-6 animate-fade-in">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">Caterer Dashboard</h2>
@@ -56,10 +58,11 @@ const CatererDashboard = () => {
                     </div>
                 )
             ) : activeTab === 'announcements' ? (<AnnouncementManager />) : activeTab === 'daily_feedback' ? (<DailyFeedbackPanel />) : (<FeedbackManager />)}
+        </div>
 
             {selectedSession && (<MenuEditor session={selectedSession} onClose={() => setSelectedSession(null)} />)}
             {showSettings && <CatererProfileSettings onClose={() => setShowSettings(false)} />}
-        </div>
+        </>
     );
 };
 
@@ -124,8 +127,8 @@ const MenuEditor = ({ session, onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
-            <div className="bg-white w-full max-w-4xl h-full shadow-xl flex flex-col animate-slide-in-right">
+        <div className="fixed inset-0 bg-transparent backdrop-blur-md z-40 flex justify-end" onClick={onClose}>
+            <div className="bg-white/80 backdrop-blur-xl w-full max-w-4xl h-full shadow-xl flex flex-col animate-slide-in-right border-l border-white/50" onClick={(e) => e.stopPropagation()}>
                 <div className="p-6 border-b flex justify-between items-center bg-gray-50"><div><h3 className="text-xl font-bold text-gray-800">Manage Menu Items</h3><p className="text-sm text-gray-500">{session.title} • Items need Admin approval before students can vote</p></div><button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><X size={24} /></button></div>
                 <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
                     <div className="w-full md:w-2/5 p-6 border-r overflow-y-auto bg-gray-50/50 space-y-5">
@@ -157,13 +160,15 @@ const MenuEditor = ({ session, onClose }) => {
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
-                                    <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" value={date} onChange={(e) => setDate(e.target.value)}>
-                                        {slotOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
-                                    </select>
+                                    <CustomSelect 
+                                        value={date} 
+                                        onChange={(val) => setDate(val)}
+                                        options={slotOptions.map(({ value, label }) => ({ value, label }))}
+                                    />
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Meal</label><select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" value={mealType} onChange={(e) => setMealType(e.target.value)}><option value="breakfast">Breakfast</option><option value="lunch">Lunch</option><option value="snacks">Snacks</option><option value="dinner">Dinner</option></select></div>
-                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Type</label><select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" value={messType} onChange={(e) => setMessType(e.target.value)}><option value="veg">Veg</option><option value="non_veg">Non-Veg</option><option value="special">Special</option><option value="food_park">Food Park</option></select></div>
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Meal</label><CustomSelect value={mealType} onChange={(val) => setMealType(val)} options={[{value:'breakfast', label:'Breakfast'},{value:'lunch', label:'Lunch'},{value:'snacks', label:'Snacks'},{value:'dinner', label:'Dinner'}]} /></div>
+                                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Type</label><CustomSelect value={messType} onChange={(val) => setMessType(val)} options={[{value:'veg', label:'Veg'},{value:'non_veg', label:'Non-Veg'},{value:'special', label:'Special'},{value:'food_park', label:'Food Park'}]} /></div>
                                 </div>
                                 <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Item Name</label><input type="text" required placeholder="e.g. Masala Dosa" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" value={name} onChange={(e) => setName(e.target.value)} /></div>
                                 <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label><textarea placeholder="Ingredients, sides..." className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
@@ -244,7 +249,20 @@ const AnnouncementManager = () => {
                 <h3 className="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2"><Bell size={20} className="text-primary" />Post New Announcement</h3>
                 <p className="text-sm text-gray-500 mb-5">Students assigned to your mess will see this announcement on their dashboard.</p>
                 <form onSubmit={handleCreate} className="space-y-4">
-                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Type</label><select value={messType} onChange={e => setMessType(e.target.value)} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"><option value="all">To All</option><option value="veg">Veg</option><option value="non_veg">Non-Veg</option><option value="special">Special</option><option value="food_park">Food Park</option></select></div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Type</label>
+                        <CustomSelect 
+                            value={messType} 
+                            onChange={(val) => setMessType(val)} 
+                            options={[
+                                { value: 'all', label: 'To All' },
+                                { value: 'veg', label: 'Veg' },
+                                { value: 'non_veg', label: 'Non-Veg' },
+                                { value: 'special', label: 'Special' },
+                                { value: 'food_park', label: 'Food Park' }
+                            ]} 
+                        />
+                    </div>
                     <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Title</label><input type="text" required value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Special menu on Saturday" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" /></div>
                     <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Message</label><textarea required value={body} onChange={e => setBody(e.target.value)} placeholder="Write your announcement here..." rows={4} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none resize-none" /></div>
                     <button type="submit" disabled={submitting} className="w-full bg-primary text-white py-2.5 rounded-lg font-semibold hover:bg-indigo-700 transition-colors">{submitting ? 'Posting...' : '📢 Post Announcement'}</button>
@@ -458,7 +476,7 @@ const DailyFeedbackPanel = () => {
             )}
 
             {expandedImage && (
-                <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setExpandedImage(null)}>
+                <div className="fixed inset-0 bg-black/70 z-40 flex items-center justify-center p-4" onClick={() => setExpandedImage(null)}>
                     <div className="relative max-w-2xl max-h-[80vh]">
                         <img src={expandedImage} alt="Food" className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl" />
                         <button onClick={() => setExpandedImage(null)} className="absolute -top-3 -right-3 bg-white text-gray-800 p-1.5 rounded-full shadow-lg hover:bg-gray-100 transition-colors"><X size={18} /></button>
@@ -484,8 +502,8 @@ const CatererProfileSettings = ({ onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm animate-scale-in">
+        <div className="fixed inset-0 bg-transparent backdrop-blur-md z-40 flex items-center justify-center p-4">
+            <div className="bg-white/80 backdrop-blur-xl rounded-xl shadow-xl w-full max-w-sm animate-scale-in border border-white/50">
                 <div className="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-xl"><h3 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Settings size={20} />Caterer Settings</h3><button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-full transition-colors"><X size={20} /></button></div>
                 <div className="p-6">
                     <h4 className="font-bold text-gray-700 mb-3">Served Mess Types</h4>

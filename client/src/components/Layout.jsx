@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabaseClient';
 import { LogOut, User, Menu, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import CustomSelect from './CustomSelect';
 
 // ─────────────────────────────────────────────
 // Profile Setup Modal — shown after Google OAuth
@@ -112,18 +113,13 @@ const ProfileSetupModal = ({ profile, onComplete }) => {
                     {/* Caterer Selection */}
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Select Caterer *</label>
-                        <select
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all bg-white"
+                        <CustomSelect
                             value={catererId}
-                            onChange={(e) => setCatererId(e.target.value)}
-                            required
+                            onChange={(val) => setCatererId(val)}
+                            options={caterers.map(c => ({ value: c.id, label: c.full_name }))}
+                            placeholder="-- Choose a Caterer --"
                             disabled={caterers.length === 0}
-                        >
-                            <option value="">-- Choose a Caterer --</option>
-                            {caterers.map((c) => (
-                                <option key={c.id} value={c.id}>{c.full_name}</option>
-                            ))}
-                        </select>
+                        />
                         {caterers.length === 0 && (
                             <p className="text-xs text-red-500 mt-1">
                                 No caterers found serving {messType.replace('_', ' ')}. Contact admin.

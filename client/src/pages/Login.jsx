@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import CustomSelect from '../components/CustomSelect';
 
 const Login = () => {
     const [loading, setLoading] = useState(false);
@@ -227,15 +228,15 @@ const Login = () => {
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700">Role *</label>
-                                        <select
-                                            className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                                        <CustomSelect
                                             value={role}
-                                            onChange={(e) => setRole(e.target.value)}
-                                        >
-                                            <option value="student">Student</option>
-                                            {settings.caterer && <option value="caterer">Caterer</option>}
-                                            {settings.admin && <option value="admin">Admin</option>}
-                                        </select>
+                                            onChange={(val) => setRole(val)}
+                                            options={[
+                                                { value: 'student', label: 'Student' },
+                                                ...(settings.caterer ? [{ value: 'caterer', label: 'Caterer' }] : []),
+                                                ...(settings.admin ? [{ value: 'admin', label: 'Admin' }] : [])
+                                            ]}
+                                        />
                                     </div>
 
                                     {!settings.caterer && !settings.admin && role === 'student' && (
@@ -302,20 +303,13 @@ const Login = () => {
 
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">Select Caterer *</label>
-                                                <select
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                                                <CustomSelect
                                                     value={assignedCatererId}
-                                                    onChange={(e) => setAssignedCatererId(e.target.value)}
-                                                    required
+                                                    onChange={(val) => setAssignedCatererId(val)}
+                                                    options={availableCaterers.map((c) => ({ value: c.id, label: c.full_name }))}
+                                                    placeholder="-- Choose a Caterer --"
                                                     disabled={availableCaterers.length === 0}
-                                                >
-                                                    <option value="">-- Choose a Caterer --</option>
-                                                    {availableCaterers.map((c) => (
-                                                        <option key={c.id} value={c.id}>
-                                                            {c.full_name}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                />
                                                 {availableCaterers.length === 0 && (
                                                     <p className="text-xs text-red-500 mt-1">
                                                         No caterers found serving {messType.replace('_', ' ')}. Please ask an admin to register caterers.
