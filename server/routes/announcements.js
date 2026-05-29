@@ -38,9 +38,25 @@ module.exports = (supabase) => {
             if (!caterer_id || !title || !body || !mess_type) {
                 return res.status(400).json({ error: 'caterer_id, title, body, and mess_type are required' });
             }
+            if (typeof title !== 'string' || title.trim().length < 5 || title.trim().length > 100) {
+                return res.status(400).json({ error: 'Title must be a string between 5 and 100 characters' });
+            }
+            if (typeof body !== 'string' || body.trim().length < 10 || body.trim().length > 1000) {
+                return res.status(400).json({ error: 'Message body must be a string between 10 and 1000 characters' });
+            }
+            const validMessTypes = ['all', 'veg', 'non_veg', 'special', 'food_park'];
+            if (!validMessTypes.includes(mess_type.toLowerCase())) {
+                return res.status(400).json({ error: `Invalid mess type. Must be one of: ${validMessTypes.join(', ')}` });
+            }
+
             const { data, error } = await supabase
                 .from('announcements')
-                .insert({ caterer_id, title, body, mess_type })
+                .insert({ 
+                    caterer_id, 
+                    title: title.trim(), 
+                    body: body.trim(), 
+                    mess_type: mess_type.toLowerCase() 
+                })
                 .select()
                 .single();
             if (error) throw error;

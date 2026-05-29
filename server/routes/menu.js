@@ -53,10 +53,41 @@ module.exports = (supabase) => {
     router.post('/', async (req, res) => {
         try {
             const { session_id, date_served, meal_type, mess_type, name, description } = req.body;
+
+            // Backend validation
+            if (!session_id) {
+                return res.status(400).json({ error: 'Session ID is required' });
+            }
+            if (!date_served || isNaN(Date.parse(date_served))) {
+                return res.status(400).json({ error: 'Valid date served is required' });
+            }
+            const validMealTypes = ['breakfast', 'lunch', 'snacks', 'dinner'];
+            if (!meal_type || !validMealTypes.includes(meal_type.toLowerCase())) {
+                return res.status(400).json({ error: `Invalid meal type. Must be one of: ${validMealTypes.join(', ')}` });
+            }
+            const validMessTypes = ['veg', 'non_veg', 'special', 'food_park'];
+            if (!mess_type || !validMessTypes.includes(mess_type.toLowerCase())) {
+                return res.status(400).json({ error: `Invalid mess type. Must be one of: ${validMessTypes.join(', ')}` });
+            }
+            if (!name || typeof name !== 'string' || !name.trim()) {
+                return res.status(400).json({ error: 'Dish name is required and must be a string' });
+            }
+            if (name.trim().length < 3 || name.trim().length > 100) {
+                return res.status(400).json({ error: 'Dish name must be between 3 and 100 characters long' });
+            }
+            if (description && description.length > 200) {
+                return res.status(400).json({ error: 'Description must be under 200 characters long' });
+            }
+
             const { data, error } = await supabase
                 .from('menu_items')
                 .insert({
-                    session_id, date_served, meal_type, mess_type, name, description,
+                    session_id, 
+                    date_served, 
+                    meal_type: meal_type.toLowerCase(), 
+                    mess_type: mess_type.toLowerCase(), 
+                    name: name.trim(), 
+                    description: description ? description.trim() : null,
                     approval_status: 'pending'  // Always starts as pending
                 })
                 .select()

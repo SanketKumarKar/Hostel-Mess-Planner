@@ -33,12 +33,38 @@ const EventsPage = () => {
 
     const handleCreate = async (e) => {
         e.preventDefault();
+        if (!title.trim()) { toast.error('Please enter an event title'); return; }
+        if (title.trim().length < 5) { toast.error('Event title must be at least 5 characters'); return; }
+        if (title.trim().length > 100) { toast.error('Event title must be under 100 characters'); return; }
+        if (!date) { toast.error('Please select date and time'); return; }
+        
+        const eventDate = new Date(date);
+        const now = new Date();
+        if (eventDate <= now) {
+            toast.error('Event date and time must be set in the future.');
+            return;
+        }
+
+        if (!location.trim()) { toast.error('Please enter a location'); return; }
+        if (location.trim().length < 3) { toast.error('Location must be at least 3 characters'); return; }
+        if (location.trim().length > 100) { toast.error('Location must be under 100 characters'); return; }
+        
+        if (!description.trim()) { toast.error('Please enter a description'); return; }
+        if (description.trim().length < 10) { toast.error('Description must be at least 10 characters'); return; }
+        if (description.trim().length > 1000) { toast.error('Description must be under 1000 characters'); return; }
+
         try {
-            const { error } = await supabase.from('events').insert({ title, description, date, location });
+            const { error } = await supabase.from('events').insert({ 
+                title: title.trim(), 
+                description: description.trim(), 
+                date, 
+                location: location.trim() 
+            });
             if (error) throw error;
             setShowCreate(false);
             setTitle(''); setDescription(''); setDate(''); setLocation('');
             fetchEvents();
+            toast.success('Event created successfully!');
         } catch (error) {
             toast.error('Error creating event');
             console.error(error);
@@ -124,20 +150,77 @@ const EventsPage = () => {
                     </div>
                     <form onSubmit={handleCreate} className="p-6 space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Event Title</label>
-                            <input required type="text" className="w-full px-3 py-2 border rounded-lg" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Hostel Night 2024" />
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Event Title *</label>
+                                {title && title.trim().length < 5 && (
+                                    <span className="text-xs text-red-500 font-medium">Min 5 chars</span>
+                                )}
+                            </div>
+                            <input 
+                                required 
+                                type="text" 
+                                className={`w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 ${
+                                    title && title.trim().length < 5 ? 'border-red-500 font-medium' : 'border-gray-200'
+                                }`} 
+                                value={title} 
+                                onChange={e => setTitle(e.target.value)} 
+                                placeholder="e.g. Hostel Night 2026" 
+                            />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
-                            <input required type="datetime-local" className="w-full px-3 py-2 border rounded-lg" value={date} onChange={e => setDate(e.target.value)} />
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time *</label>
+                            <input 
+                                required 
+                                type="datetime-local" 
+                                className="w-full px-3 py-2 border rounded-lg border-gray-200 outline-none focus:ring-2 focus:ring-primary/20" 
+                                value={date} 
+                                onChange={e => setDate(e.target.value)} 
+                            />
+                            {date && new Date(date) <= new Date() && (
+                                <p className="text-[11px] text-red-500 mt-1">⚠️ Please select a date and time in the future.</p>
+                            )}
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                            <input required type="text" className="w-full px-3 py-2 border rounded-lg" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Main Auditorium" />
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Location *</label>
+                                {location && location.trim().length < 3 && (
+                                    <span className="text-xs text-red-500 font-medium">Min 3 chars</span>
+                                )}
+                            </div>
+                            <input 
+                                required 
+                                type="text" 
+                                className={`w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 ${
+                                    location && location.trim().length < 3 ? 'border-red-500' : 'border-gray-200'
+                                }`} 
+                                value={location} 
+                                onChange={e => setLocation(e.target.value)} 
+                                placeholder="e.g. Main Auditorium" 
+                            />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                            <textarea required className="w-full px-3 py-2 border rounded-lg h-24" value={description} onChange={e => setDescription(e.target.value)} placeholder="Event details..." />
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Description *</label>
+                                <span className={`text-xs font-semibold ${description.trim().length > 1000 ? 'text-red-500' : 'text-gray-400'}`}>
+                                    {description.trim().length}/1000
+                                </span>
+                            </div>
+                            <textarea 
+                                required 
+                                className={`w-full px-3 py-2 border rounded-lg h-24 outline-none resize-none focus:ring-2 focus:ring-primary/20 ${
+                                    description && description.trim().length < 10 ? 'border-red-300' : 'border-gray-200'
+                                }`} 
+                                value={description} 
+                                onChange={e => {
+                                    if (e.target.value.length <= 1000) {
+                                        setDescription(e.target.value);
+                                    }
+                                }} 
+                                placeholder="Event details..." 
+                            />
+                            {description.trim() && description.trim().length < 10 && (
+                                <p className="text-[11px] text-red-500 mt-1">⚠️ Description must be at least 10 characters.</p>
+                            )}
                         </div>
                         <div className="pt-4 flex gap-3">
                             <button type="button" onClick={() => setShowCreate(false)} className="flex-1 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>

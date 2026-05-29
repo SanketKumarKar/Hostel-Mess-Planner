@@ -91,11 +91,26 @@ const MenuEditor = ({ session, onClose }) => {
     useEffect(() => { if (slotOptions.length > 0) setDate(slotOptions[0].value); }, [session.id]);
 
     const handleSubmit = async (e) => {
-        e.preventDefault(); setLoading(true);
+        e.preventDefault(); 
+        if (!name.trim()) { toast.error('Please enter the dish name'); return; }
+        if (name.trim().length < 3) { toast.error('Dish name must be at least 3 characters'); return; }
+        if (name.trim().length > 100) { toast.error('Dish name must be under 100 characters'); return; }
+        if (description.trim().length > 200) { toast.error('Description must be under 200 characters'); return; }
+        
+        setLoading(true);
         try {
-            const { error } = await supabase.from('menu_items').insert({ session_id: session.id, date_served: date, meal_type: mealType, mess_type: messType, name, description, approval_status: 'pending' });
+            const { error } = await supabase.from('menu_items').insert({ 
+                session_id: session.id, 
+                date_served: date, 
+                meal_type: mealType, 
+                mess_type: messType, 
+                name: name.trim(), 
+                description: description.trim(), 
+                approval_status: 'pending' 
+            });
             if (error) throw error;
             setName(''); setDescription(''); fetchItems();
+            toast.success('Menu item added successfully and is pending admin approval.');
         } catch (error) { console.error('Error adding item:', error); toast.error('Failed to add item'); } finally { setLoading(false); }
     };
 
@@ -170,8 +185,45 @@ const MenuEditor = ({ session, onClose }) => {
                                     <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Meal</label><CustomSelect value={mealType} onChange={(val) => setMealType(val)} options={[{value:'breakfast', label:'Breakfast'},{value:'lunch', label:'Lunch'},{value:'snacks', label:'Snacks'},{value:'dinner', label:'Dinner'}]} /></div>
                                     <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Type</label><CustomSelect value={messType} onChange={(val) => setMessType(val)} options={[{value:'veg', label:'Veg'},{value:'non_veg', label:'Non-Veg'},{value:'special', label:'Special'},{value:'food_park', label:'Food Park'}]} /></div>
                                 </div>
-                                <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Item Name</label><input type="text" required placeholder="e.g. Masala Dosa" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" value={name} onChange={(e) => setName(e.target.value)} /></div>
-                                <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label><textarea placeholder="Ingredients, sides..." className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+                                <div>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase">Item Name *</label>
+                                        {name && name.trim().length < 3 && (
+                                            <span className="text-[10px] text-red-500 font-medium">Min 3 chars</span>
+                                        )}
+                                    </div>
+                                    <input 
+                                        type="text" 
+                                        required 
+                                        placeholder="e.g. Masala Dosa" 
+                                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none ${
+                                            name && name.trim().length < 3 ? 'border-red-500' : 'border-gray-200'
+                                        }`} 
+                                        value={name} 
+                                        onChange={(e) => setName(e.target.value)} 
+                                    />
+                                </div>
+                                <div>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase">Description</label>
+                                        <span className={`text-[10px] font-semibold ${description.length > 200 ? 'text-red-500' : 'text-gray-400'}`}>
+                                            {description.length}/200
+                                        </span>
+                                    </div>
+                                    <textarea 
+                                        placeholder="Ingredients, sides..." 
+                                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none resize-none ${
+                                            description.length > 200 ? 'border-red-500' : 'border-gray-200'
+                                        }`} 
+                                        rows={2} 
+                                        value={description} 
+                                        onChange={(e) => {
+                                            if (e.target.value.length <= 200) {
+                                                setDescription(e.target.value);
+                                            }
+                                        }} 
+                                    />
+                                </div>
                                 <button type="submit" disabled={loading} className="w-full bg-primary text-white py-2.5 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-semibold shadow-lg shadow-indigo-100">{loading ? 'Adding...' : 'Add Item'}</button>
                             </form>
                         </div>
@@ -238,7 +290,23 @@ const AnnouncementManager = () => {
 
     useEffect(() => { if (profile) fetchAnnouncements(); }, [profile, fetchAnnouncements]);
 
-    const handleCreate = async (e) => { e.preventDefault(); if (!title.trim() || !body.trim()) return; setSubmitting(true); try { const { error } = await supabase.from('announcements').insert({ caterer_id: profile.id, title: title.trim(), body: body.trim(), mess_type: messType }); if (error) throw error; setTitle(''); setBody(''); fetchAnnouncements(); } catch (err) { toast.error('Failed to post announcement: ' + err.message); } finally { setSubmitting(false); } };
+    const handleCreate = async (e) => { 
+        e.preventDefault(); 
+        if (!title.trim()) { toast.error('Please enter a title'); return; }
+        if (title.trim().length < 5) { toast.error('Title must be at least 5 characters'); return; }
+        if (title.trim().length > 100) { toast.error('Title must be under 100 characters'); return; }
+        if (!body.trim()) { toast.error('Please enter the announcement message'); return; }
+        if (body.trim().length < 10) { toast.error('Message must be at least 10 characters'); return; }
+        if (body.trim().length > 1000) { toast.error('Message must be under 1000 characters'); return; }
+
+        setSubmitting(true); 
+        try { 
+            const { error } = await supabase.from('announcements').insert({ caterer_id: profile.id, title: title.trim(), body: body.trim(), mess_type: messType }); 
+            if (error) throw error; 
+            setTitle(''); setBody(''); fetchAnnouncements(); 
+            toast.success('Announcement posted successfully!');
+        } catch (err) { toast.error('Failed to post announcement: ' + err.message); } finally { setSubmitting(false); } 
+    };
     const handleDelete = async (id) => { if (!confirm('Delete this announcement?')) return; await supabase.from('announcements').delete().eq('id', id); fetchAnnouncements(); };
 
     const messColors = { all: 'bg-blue-100 text-blue-700', veg: 'bg-green-100 text-green-700', non_veg: 'bg-orange-100 text-orange-700', special: 'bg-purple-100 text-purple-700', food_park: 'bg-teal-100 text-teal-700' };
@@ -263,8 +331,49 @@ const AnnouncementManager = () => {
                             ]} 
                         />
                     </div>
-                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Title</label><input type="text" required value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Special menu on Saturday" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" /></div>
-                    <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Message</label><textarea required value={body} onChange={e => setBody(e.target.value)} placeholder="Write your announcement here..." rows={4} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none resize-none" /></div>
+                    <div>
+                        <div className="flex justify-between items-center mb-1">
+                            <label className="block text-xs font-bold text-gray-500 uppercase">Title *</label>
+                            {title && title.trim().length < 5 && (
+                                <span className="text-[10px] text-red-500 font-medium">Min 5 chars</span>
+                            )}
+                        </div>
+                        <input 
+                            type="text" 
+                            required 
+                            value={title} 
+                            onChange={e => setTitle(e.target.value)} 
+                            placeholder="e.g. Special menu on Saturday" 
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none ${
+                                title && title.trim().length < 5 ? 'border-red-500' : 'border-gray-200'
+                            }`} 
+                        />
+                    </div>
+                    <div>
+                        <div className="flex justify-between items-center mb-1">
+                            <label className="block text-xs font-bold text-gray-500 uppercase">Message *</label>
+                            <span className={`text-[10px] font-semibold ${body.trim().length > 1000 ? 'text-red-500' : 'text-gray-400'}`}>
+                                {body.trim().length}/1000
+                            </span>
+                        </div>
+                        <textarea 
+                            required 
+                            value={body} 
+                            onChange={e => {
+                                if (e.target.value.length <= 1000) {
+                                    setBody(e.target.value);
+                                }
+                            }} 
+                            placeholder="Write your announcement here..." 
+                            rows={4} 
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none resize-none ${
+                                body && body.trim().length < 10 ? 'border-red-300' : 'border-gray-200'
+                            }`} 
+                        />
+                        {body.trim() && body.trim().length < 10 && (
+                            <p className="text-[10px] text-red-500 mt-1">⚠️ Message must be at least 10 characters.</p>
+                        )}
+                    </div>
                     <button type="submit" disabled={submitting} className="w-full bg-primary text-white py-2.5 rounded-lg font-semibold hover:bg-indigo-700 transition-colors">{submitting ? 'Posting...' : '📢 Post Announcement'}</button>
                 </form>
             </div>
@@ -497,6 +606,10 @@ const CatererProfileSettings = ({ onClose }) => {
     const handleToggle = (type) => { setServedTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]); };
 
     const handleSave = async () => {
+        if (!servedTypes || servedTypes.length === 0) {
+            toast.error('Please select at least one served mess type.');
+            return;
+        }
         setSaving(true);
         try { const { error } = await supabase.from('profiles').update({ served_mess_types: servedTypes }).eq('id', profile?.id); if (error) throw error; toast.success('Profile updated successfully!'); window.location.reload(); } catch (error) { toast.error('Failed to update: ' + error.message); } finally { setSaving(false); }
     };

@@ -23,6 +23,14 @@ module.exports = (supabase) => {
         try {
             const { user_id, menu_item_id } = req.body;
 
+            // Backend validation
+            if (!user_id) {
+                return res.status(400).json({ error: 'User ID is required' });
+            }
+            if (!menu_item_id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(menu_item_id)) {
+                return res.status(400).json({ error: 'Valid Menu Item UUID is required' });
+            }
+
             // 1. Get the date of the item being voted on
             const { data: itemData, error: itemError } = await supabase
                 .from('menu_items')
@@ -62,6 +70,14 @@ module.exports = (supabase) => {
     router.delete('/', async (req, res) => {
         try {
             const { user_id, menu_item_id } = req.body;
+            
+            // Backend validation
+            if (!user_id) {
+                return res.status(400).json({ error: 'User ID is required' });
+            }
+            if (!menu_item_id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(menu_item_id)) {
+                return res.status(400).json({ error: 'Valid Menu Item UUID is required' });
+            }
             const { error } = await supabase
                 .from('votes')
                 .delete()

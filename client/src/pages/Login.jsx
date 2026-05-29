@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import CustomSelect from '../components/CustomSelect';
-import { X } from 'lucide-react';
+import { X, AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
     const [loading, setLoading] = useState(false);
@@ -25,6 +25,11 @@ const Login = () => {
     const [assignedCatererId, setAssignedCatererId] = useState('');
     const [agreePrivacy, setAgreePrivacy] = useState(false);
     const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+
+    // Validation States
+    const [errors, setErrors] = useState({});
+    const [touched, setTouched] = useState({});
+    const [showPassword, setShowPassword] = useState(false);
 
     useEffect(() => {
         const checkSettings = async () => {
@@ -51,17 +56,114 @@ const Login = () => {
 
             setAvailableCaterers(data || []);
             setAssignedCatererId(''); // Reset selection
+            setErrors(prev => ({ ...prev, assignedCatererId: '' }));
         };
 
         fetchCaterers();
     }, [messType, role, isRegister]);
 
     const handleServedTypeChange = (type) => {
-        setServedMessTypes(prev =>
-            prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
-        );
+        const nextTypes = servedMessTypes.includes(type)
+            ? servedMessTypes.filter(t => t !== type)
+            : [...servedMessTypes, type];
+        setServedMessTypes(nextTypes);
+        if (touched.servedMessTypes) {
+            validateField('servedMessTypes', nextTypes);
+        }
     };
     const [showConfirmation, setShowConfirmation] = useState(false);
+
+    // Reset validations on mode/role change
+    useEffect(() => {
+        setErrors({});
+        setTouched({});
+    }, [isRegister, role]);
+
+    const getPasswordStrength = (pass) => {
+        if (!pass) return { score: 0, label: '', color: 'bg-gray-200', textClass: 'text-gray-400' };
+        if (pass.length < 6) return { score: 1, label: 'Too Short', color: 'bg-red-500 w-1/4', textClass: 'text-red-500 font-medium' };
+
+        let score = 0;
+        if (pass.length >= 8) score++;
+        if (/[A-Z]/.test(pass)) score++;
+        if (/[a-z]/.test(pass)) score++;
+        if (/[0-9]/.test(pass)) score++;
+        if (/[^A-Za-z0-9]/.test(pass)) score++;
+
+        if (score <= 1) return { score: 2, label: 'Weak', color: 'bg-orange-500 w-2/4', textClass: 'text-orange-500 font-medium' };
+        if (score === 2 || score === 3) return { score: 3, label: 'Medium', color: 'bg-yellow-500 w-3/4', textClass: 'text-yellow-600 font-medium' };
+        return { score: 4, label: 'Strong', color: 'bg-green-500 w-full', textClass: 'text-green-600 font-bold' };
+    };
+
+    const validateField = (name, value, currentRole = role) => {
+        let errorMsg = '';
+        if (isRegister) {
+            if (name === 'fullName') {
+                if (!value.trim()) {
+                    errorMsg = 'Please enter your full name';
+                } else if (value.trim().length < 3) {
+                    errorMsg = 'Full name must be at least 3 characters';
+                } else if (!/^[A-Za-z\s]+$/.test(value)) {
+                    errorMsg = 'Name can only contain letters and spaces';
+                } else if (currentRole === 'student' && value.trim().split(/\s+/).length < 2) {
+                    errorMsg = 'Please enter both first and last name';
+                }
+            } else if (name === 'regNumber' && currentRole === 'student') {
+                if (!value.trim()) {
+                    errorMsg = 'Please enter your registration number';
+                } else if (!/^\d{2}[A-Za-z]{3}\d{4}$/.test(value.trim().toUpperCase())) {
+                    errorMsg = 'Must be a valid VIT registration number (e.g., 20BCE0123)';
+                }
+            } else if (name === 'assignedCatererId' && currentRole === 'student') {
+                if (!value) {
+                    errorMsg = 'Please select a caterer';
+                }
+            } else if (name === 'servedMessTypes' && currentRole === 'caterer') {
+                if (!value || value.length === 0) {
+                    errorMsg = 'Please select at least one served mess type';
+                }
+            }
+        }
+
+        if (name === 'email') {
+            if (!value) {
+                errorMsg = 'Please enter your email';
+            } else {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(value)) {
+                    errorMsg = 'Please enter a valid email address';
+                } else if (isRegister && currentRole === 'student') {
+                    const domain = value.split('@')[1];
+                    if (domain !== 'vitstudent.ac.in' && domain !== 'vit.ac.in') {
+                        errorMsg = 'Students must register with a valid VIT email address (@vitstudent.ac.in or @vit.ac.in).';
+                    }
+                }
+            }
+        }
+
+        if (name === 'password') {
+            if (!value) {
+                errorMsg = 'Please enter your password';
+            } else if (value.length < 6) {
+                errorMsg = 'Password must be at least 6 characters';
+            }
+        }
+
+        setErrors(prev => ({ ...prev, [name]: errorMsg }));
+        return errorMsg;
+    };
+
+    const handleBlur = (field) => {
+        setTouched(prev => ({ ...prev, [field]: true }));
+        let val = '';
+        if (field === 'fullName') val = fullName;
+        else if (field === 'regNumber') val = regNumber;
+        else if (field === 'email') val = email;
+        else if (field === 'password') val = password;
+        else if (field === 'assignedCatererId') val = assignedCatererId;
+        else if (field === 'servedMessTypes') val = servedMessTypes;
+        validateField(field, val);
+    };
 
     const handleGoogleLogin = async () => {
         setLoading(true);
@@ -86,28 +188,50 @@ const Login = () => {
 
     const handleAuth = async (e) => {
         e.preventDefault();
+
+        // Validate all relevant fields
+        const fieldsToValidate = ['email', 'password'];
+        if (isRegister) {
+            fieldsToValidate.push('fullName');
+            if (role === 'student') {
+                fieldsToValidate.push('regNumber');
+                fieldsToValidate.push('assignedCatererId');
+            }
+            if (role === 'caterer') {
+                fieldsToValidate.push('servedMessTypes');
+            }
+        }
+
+        const newTouched = {};
+        const newErrors = {};
+        let hasErrors = false;
+
+        fieldsToValidate.forEach(field => {
+            newTouched[field] = true;
+            let val = '';
+            if (field === 'fullName') val = fullName;
+            else if (field === 'regNumber') val = regNumber;
+            else if (field === 'email') val = email;
+            else if (field === 'password') val = password;
+            else if (field === 'assignedCatererId') val = assignedCatererId;
+            else if (field === 'servedMessTypes') val = servedMessTypes;
+
+            const err = validateField(field, val, role);
+            if (err) {
+                newErrors[field] = err;
+                hasErrors = true;
+            }
+        });
+
+        setTouched(newTouched);
+        if (hasErrors) {
+            toast.error('Please correct the errors in the form');
+            return;
+        }
+
         setLoading(true);
         try {
             if (isRegister) {
-                // Validation
-                if (!fullName.trim()) throw new Error('Please enter your full name');
-
-                if (role === 'student') {
-                    if (!regNumber.trim()) throw new Error('Please enter your registration number');
-                    if (!assignedCatererId) throw new Error('Please select a caterer');
-                }
-
-                if (role === 'caterer') {
-                    if (servedMessTypes.length === 0) throw new Error('Please select at least one served mess type');
-                }
-
-                if (role === 'student') {
-                    const emailDomain = email.split('@')[1];
-                    if (emailDomain !== 'vitstudent.ac.in' && emailDomain !== 'vit.ac.in') {
-                        throw new Error('Students must register with a valid VIT email address (@vitstudent.ac.in or @vit.ac.in).');
-                    }
-                }
-
                 const emailRedirectTo = window.location.hostname === 'localhost'
                     ? `${window.location.origin}/login`
                     : 'https://hostel-mess-planner.vercel.app/login';
@@ -143,7 +267,7 @@ const Login = () => {
                             full_name: fullName,
                             role: role,
                             mess_type: role === 'student' ? messType : null,
-                            reg_number: role === 'student' ? regNumber : null,
+                            reg_number: role === 'student' ? regNumber.toUpperCase() : null,
                             served_mess_types: role === 'caterer' ? servedMessTypes : null,
                             assigned_caterer_id: role === 'student' ? assignedCatererId : null
                         });
@@ -219,14 +343,40 @@ const Login = () => {
                                 <>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700">Full Name *</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            placeholder="Enter your full name"
-                                            className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                                            value={fullName}
-                                            onChange={(e) => setFullName(e.target.value)}
-                                        />
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                required
+                                                placeholder="Enter your full name"
+                                                className={`mt-1 w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-transparent outline-none transition-all ${
+                                                    touched.fullName && errors.fullName
+                                                        ? 'border-red-500 focus:ring-red-200'
+                                                        : touched.fullName && !errors.fullName
+                                                        ? 'border-green-500 focus:ring-green-200'
+                                                        : 'border-gray-300 focus:ring-primary'
+                                                }`}
+                                                value={fullName}
+                                                onChange={(e) => {
+                                                    setFullName(e.target.value);
+                                                    validateField('fullName', e.target.value);
+                                                }}
+                                                onBlur={() => handleBlur('fullName')}
+                                            />
+                                            {touched.fullName && (
+                                                <div className="absolute right-3 top-[14px] flex items-center">
+                                                    {errors.fullName ? (
+                                                        <AlertCircle className="w-5 h-5 text-red-500" />
+                                                    ) : fullName && (
+                                                        <CheckCircle2 className="w-5 h-5 text-green-500" />
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {touched.fullName && errors.fullName && (
+                                            <p className="text-xs text-red-500 mt-1 flex items-center gap-1 animate-slide-down">
+                                                {errors.fullName}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>
@@ -259,12 +409,18 @@ const Login = () => {
                                                             checked={servedMessTypes.includes(type)}
                                                             onChange={() => handleServedTypeChange(type)}
                                                             className="w-4 h-4 text-primary rounded focus:ring-primary"
+                                                            onBlur={() => handleBlur('servedMessTypes')}
                                                         />
                                                         <span className="capitalize">{type.replace('_', ' ')}</span>
                                                     </label>
                                                 ))}
                                             </div>
                                             <p className="text-xs text-gray-500 mt-1">Select all the mess types you serve.</p>
+                                            {touched.servedMessTypes && errors.servedMessTypes && (
+                                                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                                    {errors.servedMessTypes}
+                                                </p>
+                                            )}
                                         </div>
                                     )}
 
@@ -272,14 +428,40 @@ const Login = () => {
                                         <>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700">Registration Number *</label>
-                                                <input
-                                                    type="text"
-                                                    required
-                                                    placeholder="e.g., 2024001"
-                                                    className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                                                    value={regNumber}
-                                                    onChange={(e) => setRegNumber(e.target.value)}
-                                                />
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        required
+                                                        placeholder="e.g., 20BCE0123"
+                                                        className={`mt-1 w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all ${
+                                                            touched.regNumber && errors.regNumber
+                                                                ? 'border-red-500 focus:ring-red-200'
+                                                                : touched.regNumber && !errors.regNumber
+                                                                ? 'border-green-500 focus:ring-green-200'
+                                                                : 'border-gray-300 focus:ring-primary'
+                                                        }`}
+                                                        value={regNumber}
+                                                        onChange={(e) => {
+                                                            setRegNumber(e.target.value);
+                                                            validateField('regNumber', e.target.value);
+                                                        }}
+                                                        onBlur={() => handleBlur('regNumber')}
+                                                    />
+                                                    {touched.regNumber && (
+                                                        <div className="absolute right-3 top-[14px] flex items-center">
+                                                            {errors.regNumber ? (
+                                                                <AlertCircle className="w-5 h-5 text-red-500" />
+                                                            ) : regNumber && (
+                                                                <CheckCircle2 className="w-5 h-5 text-green-500" />
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {touched.regNumber && errors.regNumber && (
+                                                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                                        {errors.regNumber}
+                                                    </p>
+                                                )}
                                             </div>
 
                                             <div>
@@ -308,14 +490,22 @@ const Login = () => {
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">Select Caterer *</label>
                                                 <CustomSelect
                                                     value={assignedCatererId}
-                                                    onChange={(val) => setAssignedCatererId(val)}
+                                                    onChange={(val) => {
+                                                        setAssignedCatererId(val);
+                                                        validateField('assignedCatererId', val);
+                                                    }}
                                                     options={availableCaterers.map((c) => ({ value: c.id, label: c.full_name }))}
                                                     placeholder="-- Choose a Caterer --"
                                                     disabled={availableCaterers.length === 0}
                                                 />
+                                                {touched.assignedCatererId && errors.assignedCatererId && (
+                                                    <p className="text-xs text-red-500 mt-1">
+                                                        {errors.assignedCatererId}
+                                                    </p>
+                                                )}
                                                 {availableCaterers.length === 0 && (
                                                     <p className="text-xs text-red-500 mt-1">
-                                                        No caterers found serving {messType.replace('_', ' ')}. Please ask an admin to register caterers.
+                                                        Please select another mess type.
                                                     </p>
                                                 )}
                                             </div>
@@ -325,24 +515,105 @@ const Login = () => {
                             )}
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Email</label>
-                                <input
-                                    type="email"
-                                    required
-                                    className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                />
+                                <label className="block text-sm font-medium text-gray-700">Email *</label>
+                                <div className="relative">
+                                    <input
+                                        type="email"
+                                        required
+                                        className={`mt-1 w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all ${
+                                            touched.email && errors.email
+                                                ? 'border-red-500 focus:ring-red-200'
+                                                : touched.email && !errors.email
+                                                ? 'border-green-500 focus:ring-green-200'
+                                                : 'border-gray-300 focus:ring-primary'
+                                        }`}
+                                        value={email}
+                                        onChange={(e) => {
+                                            setEmail(e.target.value);
+                                            validateField('email', e.target.value);
+                                        }}
+                                        onBlur={() => handleBlur('email')}
+                                    />
+                                    {touched.email && (
+                                         <div className="absolute right-3 top-[14px] flex items-center">
+                                             {errors.email ? (
+                                                 <AlertCircle className="w-5 h-5 text-red-500" />
+                                             ) : email && (
+                                                 <CheckCircle2 className="w-5 h-5 text-green-500" />
+                                             )}
+                                         </div>
+                                    )}
+                                </div>
+                                {touched.email && errors.email && (
+                                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                        {errors.email}
+                                    </p>
+                                )}
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Password</label>
-                                <input
-                                    type="password"
-                                    required
-                                    className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                />
+                                <label className="block text-sm font-medium text-gray-700">Password *</label>
+                                <div className="relative">
+                                    <input
+                                        type={showPassword ? 'text' : 'password'}
+                                        required
+                                        className={`mt-1 w-full pl-4 pr-16 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all ${
+                                            touched.password && errors.password
+                                                ? 'border-red-500 focus:ring-red-200'
+                                                : touched.password && !errors.password
+                                                ? 'border-green-500 focus:ring-green-200'
+                                                : 'border-gray-300 focus:ring-primary'
+                                        }`}
+                                        value={password}
+                                        onChange={(e) => {
+                                            setPassword(e.target.value);
+                                            validateField('password', e.target.value);
+                                        }}
+                                        onBlur={() => handleBlur('password')}
+                                    />
+                                    <div className="absolute right-3 top-[14px] flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="text-gray-400 hover:text-gray-600 focus:outline-none flex items-center"
+                                        >
+                                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                        {touched.password && (
+                                            <div className="flex items-center shrink-0">
+                                                {errors.password ? (
+                                                    <AlertCircle className="w-5 h-5 text-red-500" />
+                                                ) : password && (
+                                                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                {touched.password && errors.password && (
+                                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                        {errors.password}
+                                    </p>
+                                )}
+                                
+                                {/* Password Strength Meter */}
+                                {isRegister && password && (
+                                    <div className="mt-2 space-y-1 animate-slide-down">
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-gray-500">Password Strength:</span>
+                                            <span className={getPasswordStrength(password).textClass}>
+                                                {getPasswordStrength(password).label}
+                                            </span>
+                                        </div>
+                                        <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                                            <div 
+                                                className={`h-full rounded-full transition-all duration-300 ${getPasswordStrength(password).color}`}
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-gray-400">
+                                            Use 8+ characters with mixed case, numbers, and symbols for a strong password.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                             
                             {isRegister && (

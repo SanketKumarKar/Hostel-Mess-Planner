@@ -57,11 +57,33 @@ const AdminDashboard = () => {
 
     const createSession = async (e) => {
         e.preventDefault();
+        if (!title.trim()) { toast.error('Please enter a session title'); return; }
+        if (title.trim().length < 3) { toast.error('Session title must be at least 3 characters'); return; }
+        if (!startDate || !endDate) { toast.error('Please select both start and end dates'); return; }
+        
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        if (end <= start) {
+            toast.error('End date must be strictly after the start date.');
+            return;
+        }
+
+        // Warning for date range
+        const diffTime = Math.abs(end - start);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // inclusive
+        const expectedDays = Number(sessionWeeks) === 1 ? 7 : 14;
+        if (Math.abs(diffDays - expectedDays) > 1) {
+            if (!confirm(`Warning: The date range you selected is ${diffDays} days, but your menu cycle is set to ${sessionWeeks} week(s) (expected around ${expectedDays} days). Do you still wish to proceed?`)) {
+                return;
+            }
+        }
+
         try {
-            const { error } = await supabase.from('voting_sessions').insert({ title, start_date: startDate, end_date: endDate, session_weeks: Number(sessionWeeks) === 1 ? 1 : 2, status: 'draft' });
+            const { error } = await supabase.from('voting_sessions').insert({ title: title.trim(), start_date: startDate, end_date: endDate, session_weeks: Number(sessionWeeks) === 1 ? 1 : 2, status: 'draft' });
             if (error) throw error;
             setShowCreate(false); setTitle(''); setStartDate(''); setEndDate(''); setSessionWeeks(2);
             fetchSessions();
+            toast.success('Voting session created successfully in Draft mode!');
         } catch (error) { toast.error('Error creating session'); }
     };
 
@@ -522,11 +544,17 @@ const AdminMenuEditor = ({ session, onClose }) => {
     useEffect(() => { if (slotOptions.length > 0) setDate(slotOptions[0].value); }, [session.id]);
 
     const handleSubmit = async (e) => {
-        e.preventDefault(); setLoading(true);
+        e.preventDefault(); 
+        if (!name.trim()) { toast.error('Please enter the dish name'); return; }
+        if (name.trim().length < 3) { toast.error('Dish name must be at least 3 characters'); return; }
+        if (name.trim().length > 100) { toast.error('Dish name must be under 100 characters'); return; }
+        if (description.trim().length > 200) { toast.error('Description must be under 200 characters'); return; }
+
+        setLoading(true);
         try {
             const { error } = await supabase.from('menu_items').insert({ 
                 session_id: session.id, date_served: date, meal_type: mealType, mess_type: messType, 
-                name, description, approval_status: 'approved'
+                name: name.trim(), description: description.trim(), approval_status: 'approved'
             });
             if (error) throw error;
             
@@ -956,8 +984,45 @@ const AdminMenuEditor = ({ session, onClose }) => {
                                     <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Meal</label><CustomSelect value={mealType} onChange={(val) => setMealType(val)} options={[{value:'breakfast', label:'Breakfast'},{value:'lunch', label:'Lunch'},{value:'snacks', label:'Snacks'},{value:'dinner', label:'Dinner'}]} /></div>
                                     <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mess Form</label><CustomSelect value={messType} onChange={(val) => setMessType(val)} options={[{value:'veg', label:'Veg'},{value:'non_veg', label:'NVeg'},{value:'special', label:'Spl'},{value:'food_park', label:'Park'}]} /></div>
                                 </div>
-                                <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Item Name</label><input type="text" required placeholder="e.g. Masala Dosa" className="w-full px-3 py-2 border rounded-lg outline-none text-sm" value={name} onChange={(e) => setName(e.target.value)} /></div>
-                                <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label><textarea placeholder="Ingredients, sides..." className="w-full px-3 py-2 border rounded-lg outline-none text-sm" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+                                <div>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase">Item Name *</label>
+                                        {name && name.trim().length < 3 && (
+                                            <span className="text-[10px] text-red-500 font-medium">Min 3 chars</span>
+                                        )}
+                                    </div>
+                                    <input 
+                                        type="text" 
+                                        required 
+                                        placeholder="e.g. Masala Dosa" 
+                                        className={`w-full px-3 py-2 border rounded-lg outline-none text-sm focus:ring-2 focus:ring-primary/20 ${
+                                            name && name.trim().length < 3 ? 'border-red-500' : 'border-gray-200'
+                                        }`} 
+                                        value={name} 
+                                        onChange={(e) => setName(e.target.value)} 
+                                    />
+                                </div>
+                                <div>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase">Description</label>
+                                        <span className={`text-[10px] font-semibold ${description.length > 200 ? 'text-red-500' : 'text-gray-400'}`}>
+                                            {description.length}/200
+                                        </span>
+                                    </div>
+                                    <textarea 
+                                        placeholder="Ingredients, sides..." 
+                                        className={`w-full px-3 py-2 border rounded-lg outline-none text-sm resize-none focus:ring-2 focus:ring-primary/20 ${
+                                            description.length > 200 ? 'border-red-500' : 'border-gray-200'
+                                        }`} 
+                                        rows={2} 
+                                        value={description} 
+                                        onChange={(e) => {
+                                            if (e.target.value.length <= 200) {
+                                                setDescription(e.target.value);
+                                            }
+                                        }} 
+                                    />
+                                </div>
                                 <button type="submit" disabled={loading} className="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-semibold flex justify-center items-center gap-2 mt-2">
                                     {loading ? <><Loader2 size={16} className="animate-spin" /> Adding...</> : 'Schedule Item'}
                                 </button>

@@ -131,6 +131,14 @@ const DailyFoodFeedback = () => {
     const handleImageSelect = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
+
+        // Check file type
+        const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!validTypes.includes(file.type)) {
+            toast.error('Please select a valid image file (JPEG, PNG, or WEBP)');
+            return;
+        }
+
         if (file.size > 10 * 1024 * 1024) { toast.error('Image must be under 10MB'); return; }
         setImageFile(file);
         const reader = new FileReader();
@@ -143,6 +151,7 @@ const DailyFoodFeedback = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!message.trim()) { toast.error('Please write your feedback'); return; }
+        if (message.trim().length < 10) { toast.error('Feedback must be at least 10 characters'); return; }
         if (!profile?.assigned_caterer_id) { toast.error('No caterer assigned. Update your profile first.'); return; }
 
         setSubmitting(true);
@@ -259,15 +268,33 @@ const DailyFoodFeedback = () => {
 
                 <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
                     <div>
-                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Your Feedback</label>
+                        <div className="flex justify-between items-center mb-1">
+                            <label className="block text-xs sm:text-sm font-medium text-gray-700">Your Feedback *</label>
+                            <span className={`text-xs font-medium ${message.trim().length > 500 ? 'text-red-500' : 'text-gray-400'}`}>
+                                {message.trim().length}/500
+                            </span>
+                        </div>
                         <textarea
                             value={message}
-                            onChange={(e) => setMessage(e.target.value)}
+                            onChange={(e) => {
+                                if (e.target.value.length <= 500) {
+                                    setMessage(e.target.value);
+                                }
+                            }}
                             rows={3}
-                            className="w-full rounded-lg border-gray-300 focus:ring-primary focus:border-primary p-2.5 sm:p-3 bg-gray-50 hover:bg-white transition-colors border resize-none text-sm"
+                            className={`w-full rounded-lg p-2.5 sm:p-3 bg-gray-50 hover:bg-white transition-colors border resize-none text-sm outline-none ${
+                                message.trim() && message.trim().length < 10
+                                    ? 'border-red-300 focus:ring-red-200 focus:border-red-500'
+                                    : 'border-gray-300 focus:ring-primary focus:border-primary'
+                            }`}
                             placeholder={`How was today's ${selectedMeal}? Any specific dish you liked or disliked?`}
                             required
                         />
+                        {message.trim() && message.trim().length < 10 && (
+                            <p className="text-xs text-red-500 mt-1 flex items-center gap-1 animate-slide-down">
+                                ⚠️ Feedback must be at least 10 characters to be constructive.
+                            </p>
+                        )}
                     </div>
 
                     {/* Image Upload */}
@@ -363,7 +390,9 @@ const GeneralFeedback = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!selectedCaterer || !message.trim()) return;
+        if (!selectedCaterer) { toast.error('Please select a caterer'); return; }
+        if (!message.trim()) { toast.error('Please write your feedback'); return; }
+        if (message.trim().length < 10) { toast.error('Feedback must be at least 10 characters'); return; }
         setSubmitting(true);
         try {
             const { error } = await supabase.from('feedbacks').insert({ student_id: profile.id, caterer_id: selectedCaterer, message: message.trim(), feedback_type: 'general' });
@@ -387,7 +416,7 @@ const GeneralFeedback = () => {
                 <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4 border-b pb-2">Submit General Feedback</h3>
                 <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
                     <div>
-                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Select Caterer</label>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Select Caterer *</label>
                         <CustomSelect 
                             value={selectedCaterer} 
                             onChange={(val) => setSelectedCaterer(val)} 
@@ -396,10 +425,35 @@ const GeneralFeedback = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Your Message</label>
-                        <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} className="w-full rounded-lg border-gray-300 focus:ring-primary focus:border-primary p-2.5 sm:p-3 bg-gray-50 hover:bg-white transition-colors border resize-none text-sm" placeholder="Write your compliments or complaints here..." required />
+                        <div className="flex justify-between items-center mb-1">
+                            <label className="block text-xs sm:text-sm font-medium text-gray-700">Your Message *</label>
+                            <span className={`text-xs font-medium ${message.trim().length > 500 ? 'text-red-500' : 'text-gray-400'}`}>
+                                {message.trim().length}/500
+                            </span>
+                        </div>
+                        <textarea 
+                            value={message} 
+                            onChange={(e) => {
+                                if (e.target.value.length <= 500) {
+                                    setMessage(e.target.value);
+                                }
+                            }} 
+                            rows={4} 
+                            className={`w-full rounded-lg p-2.5 sm:p-3 bg-gray-50 hover:bg-white transition-colors border resize-none text-sm outline-none ${
+                                message.trim() && message.trim().length < 10
+                                    ? 'border-red-300 focus:ring-red-200 focus:border-red-500'
+                                    : 'border-gray-300 focus:ring-primary focus:border-primary'
+                            }`}
+                            placeholder="Write your compliments or complaints here..." 
+                            required 
+                        />
+                        {message.trim() && message.trim().length < 10 && (
+                            <p className="text-xs text-red-500 mt-1 flex items-center gap-1 animate-slide-down">
+                                ⚠️ Message must be at least 10 characters to be detailed and useful.
+                            </p>
+                        )}
                     </div>
-                    <button type="submit" disabled={submitting || !selectedCaterer || !message} className={`w-full py-2.5 rounded-lg flex items-center justify-center gap-2 font-bold text-white text-sm transition-all ${submitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary hover:bg-indigo-700 hover:shadow-md'}`}>
+                    <button type="submit" disabled={submitting} className={`w-full py-2.5 rounded-lg flex items-center justify-center gap-2 font-bold text-white text-sm transition-all ${submitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary hover:bg-indigo-700 hover:shadow-md'}`}>
                         {submitting ? 'Sending...' : <><Send size={16} /> Submit Feedback</>}
                     </button>
                 </form>

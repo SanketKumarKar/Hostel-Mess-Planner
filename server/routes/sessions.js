@@ -21,10 +21,31 @@ module.exports = (supabase) => {
     router.post('/', async (req, res) => {
         try {
             const { title, start_date, end_date, session_weeks } = req.body;
+
+            // Backend validation
+            if (!title || typeof title !== 'string' || !title.trim()) {
+                return res.status(400).json({ error: 'Title is required and must be a string' });
+            }
+            if (title.trim().length < 3) {
+                return res.status(400).json({ error: 'Title must be at least 3 characters long' });
+            }
+            if (!start_date || isNaN(Date.parse(start_date))) {
+                return res.status(400).json({ error: 'Valid start date is required' });
+            }
+            if (!end_date || isNaN(Date.parse(end_date))) {
+                return res.status(400).json({ error: 'Valid end date is required' });
+            }
+            if (new Date(end_date) <= new Date(start_date)) {
+                return res.status(400).json({ error: 'End date must be strictly after start date' });
+            }
+            if (session_weeks && ![1, 2].includes(Number(session_weeks))) {
+                return res.status(400).json({ error: 'Session weeks must be either 1 or 2' });
+            }
+
             const normalizedWeeks = Number(session_weeks) === 1 ? 1 : 2;
             const { data, error } = await supabase
                 .from('voting_sessions')
-                .insert({ title, start_date, end_date, session_weeks: normalizedWeeks, status: 'draft' })
+                .insert({ title: title.trim(), start_date, end_date, session_weeks: normalizedWeeks, status: 'draft' })
                 .select()
                 .single();
 
@@ -40,6 +61,12 @@ module.exports = (supabase) => {
         try {
             const { id } = req.params;
             const { status } = req.body;
+
+            const validStatuses = ['draft', 'open_for_voting', 'closed', 'finalized'];
+            if (!status || !validStatuses.includes(status)) {
+                return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+            }
+
             const { data, error } = await supabase
                 .from('voting_sessions')
                 .update({ status })

@@ -542,4 +542,12 @@ body {
   border: solid white;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg) translate(-5%, -15%);
+}
+
+/* Hide default reveal password eye icon in IE/Edge/Chrome */
+input::-ms-reveal,
+input::-ms-clear,
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button {
+  display: none !important;
 }

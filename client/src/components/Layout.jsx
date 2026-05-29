@@ -124,7 +124,7 @@ const ProfileSetupModal = ({ profile, onComplete }) => {
                         />
                         {caterers.length === 0 && (
                             <p className="text-xs text-red-500 mt-1">
-                                No caterers found serving {messType.replace('_', ' ')}. Contact admin.
+                                Please select any mess type or contact admin.
                             </p>
                         )}
                     </div>
