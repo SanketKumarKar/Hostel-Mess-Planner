@@ -3,12 +3,24 @@ const cors = require('cors');
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
+// Rate limiting middleware
+const {
+  globalLimiter,
+  readLimiter,
+  writeLimiter,
+  aiLimiter,
+  pdfLimiter,
+} = require('./middleware/rateLimiter');
+
 const app = express();
 const port = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// ─── Global rate limiter (applies to every request) ───
+app.use(globalLimiter);
 
 // Supabase Client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -37,18 +49,22 @@ app.get('/', (req, res) => {
   });
 });
 
-// API Routes
-app.use('/api/sessions', sessionRoutes(supabase));
-app.use('/api/menu', menuRoutes(supabase));
-app.use('/api/votes', voteRoutes(supabase));
-app.use('/api/announcements', announcementRoutes(supabase));
-app.use('/api/ai', aiRoutes(supabase));
+// ─── Tiered rate limits on API routes ───
+
+// READ endpoints — generous limit for frequent polling
+app.use('/api/sessions', readLimiter, sessionRoutes(supabase));
+app.use('/api/menu', readLimiter, menuRoutes(supabase));
+app.use('/api/votes', readLimiter, voteRoutes(supabase));
+app.use('/api/announcements', readLimiter, announcementRoutes(supabase));
+
+// AI endpoints — strict limit (expensive Gemini API calls)
+app.use('/api/ai', aiLimiter, aiRoutes(supabase));
 
 // Import PDF Generator
 const { generateReport } = require('./pdfGenerator');
 
-// PDF Generation endpoint
-app.get('/api/generate-pdf/:sessionId/:messType', async (req, res) => {
+// PDF Generation endpoint — strict limit (resource-heavy)
+app.get('/api/generate-pdf/:sessionId/:messType', pdfLimiter, async (req, res) => {
   try {
     const { sessionId, messType } = req.params;
 
