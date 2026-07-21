@@ -201,4 +201,16 @@ To launch the project on your local machine for further development:
 
 ---
 
+## 🐳 Dockerized Version Branch
+
+For Docker-based development and deployment work, switch to the `dockerized-version` branch.
+
+```bash
+git checkout dockerized-version
+```
+
+All Docker-specific setup and instructions should be maintained in that branch.
+
+---
+
 > *This platform is built entirely with extensibility in mind. Its modular role-based design makes it highly functional for massive university campuses, scaled corporate cafeterias, and decentralized food distribution services looking to tighten the feedback loop between consumption and supply.*
