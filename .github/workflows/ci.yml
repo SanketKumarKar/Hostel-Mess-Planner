@@ -1,0 +1,54 @@
+name: FeastFull CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+
+jobs:
+  client:
+    name: Client build and lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install client dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build client
+        run: npm run build
+
+      - name: Lint client
+        run: npm run lint
+
+  server:
+    name: Server syntax check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install server dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Check server entrypoint syntax
+        run: node --check index.js

@@ -1,0 +1,55 @@
+name: FeastFull deployment
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target deployment environment
+        required: true
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  deploy-client:
+    name: Deploy frontend to Vercel
+    runs-on: ubuntu-latest
+    if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID_CLIENT != '' }}
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' && 'production' || 'preview') }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy client app
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID_CLIENT }}
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+          working-directory: ./client
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          vercel-args: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' && '--prod' || '' }}
+
+  deploy-server:
+    name: Deploy backend to Vercel
+    runs-on: ubuntu-latest
+    if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID_SERVER != '' }}
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' && 'production' || 'preview') }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy server app
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID_SERVER }}
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+          working-directory: ./server
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          vercel-args: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' && '--prod' || '' }}
