@@ -483,6 +483,14 @@ const DailyFeedbackPanel = () => {
             setSummary(res.data.summary);
             setFeedbacks(res.data.feedbacks || []);
             setFeedbackCount(res.data.feedbackCount || 0);
+
+            // Mark feedbacks as reviewed by AI
+            if (rawFeedbacks && rawFeedbacks.length > 0) {
+                const ids = rawFeedbacks.map(f => f.id).filter(Boolean);
+                if (ids.length > 0) {
+                    await supabase.from('feedbacks').update({ reviewed_by_ai: true }).in('id', ids);
+                }
+            }
         } catch (err) {
             console.error('Error fetching daily feedback:', err);
             toast.error('Failed to fetch feedback summary');

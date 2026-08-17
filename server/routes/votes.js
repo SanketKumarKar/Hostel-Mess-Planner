@@ -31,26 +31,32 @@ module.exports = (supabase) => {
                 return res.status(400).json({ error: 'Valid Menu Item UUID is required' });
             }
 
-            // 1. Get the date of the item being voted on
+            // 1. Get the date, meal_type, and session limits of the item being voted on
             const { data: itemData, error: itemError } = await supabase
                 .from('menu_items')
-                .select('date_served')
+                .select('date_served, meal_type, session:voting_sessions!session_id(breakfast_limit, lunch_limit, snacks_limit, dinner_limit)')
                 .eq('id', menu_item_id)
                 .single();
 
             if (itemError) throw itemError;
+
+            const mealType = itemData.meal_type;
+            const defaultLimits = { breakfast: 3, lunch: 6, snacks: 2, dinner: 6 };
+            const limitKey = `${mealType}_limit`;
+            const mealLimit = itemData.session?.[limitKey] || defaultLimits[mealType] || 4;
             
-            // 2. Count existing votes for this user on this same date
+            // 2. Count existing votes for this user on this same date and meal_type
             const { count, error: countError } = await supabase
                 .from('votes')
-                .select('id, menu_items!inner(date_served)', { count: 'exact', head: true })
+                .select('id, menu_items!inner(date_served, meal_type)', { count: 'exact', head: true })
                 .eq('user_id', user_id)
-                .eq('menu_items.date_served', itemData.date_served);
+                .eq('menu_items.date_served', itemData.date_served)
+                .eq('menu_items.meal_type', mealType);
 
             if (countError) throw countError;
 
-            if (count >= 8) {
-                return res.status(400).json({ error: 'You can only vote for up to 8 items per day.' });
+            if (count >= mealLimit) {
+                return res.status(400).json({ error: `You can only vote for up to ${mealLimit} items for ${mealType} on this day.` });
             }
 
             const { data, error } = await supabase

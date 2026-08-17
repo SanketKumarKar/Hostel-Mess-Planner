@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { Plus, Check, X, Clock, PlayCircle, StopCircle, RefreshCw, AlertCircle, TrendingUp, Calendar, Trash, Trash2, ArrowRight, Settings, MessageSquare, Users, UserCog, UserX, Sparkles, Loader2, XCircle, CheckCircle } from 'lucide-react';
+import { Plus, Check, X, Clock, PlayCircle, StopCircle, RefreshCw, AlertCircle, TrendingUp, Calendar, Trash, Trash2, ArrowRight, Settings, MessageSquare, Users, UserCog, UserX, Sparkles, Loader2, XCircle, CheckCircle, Download, FileSpreadsheet, Eye, Filter, Search, Image as ImageIcon, MessageCircle, Send } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import CustomSelect from '../components/CustomSelect';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { buildSlotOptions, formatSlotLabel, getTotalSlots } from '../utils/menuSlots';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -34,6 +35,10 @@ const AdminDashboard = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [sessionWeeks, setSessionWeeks] = useState(2);
+    const [breakfastLimit, setBreakfastLimit] = useState(3);
+    const [lunchLimit, setLunchLimit] = useState(6);
+    const [snacksLimit, setSnacksLimit] = useState(2);
+    const [dinnerLimit, setDinnerLimit] = useState(6);
 
     useEffect(() => { fetchSessions(); fetchStats(); }, []);
 
@@ -47,7 +52,11 @@ const AdminDashboard = () => {
 
     const fetchStats = async () => {
         try {
-            const { count: feedbackCount } = await supabase.from('feedbacks').select('*', { count: 'exact', head: true }).is('response', null);
+            const { count: feedbackCount } = await supabase
+                .from('feedbacks')
+                .select('*', { count: 'exact', head: true })
+                .is('response', null)
+                .or('reviewed_by_ai.is.null,reviewed_by_ai.eq.false');
             const { count: voteCount } = await supabase.from('votes').select('*', { count: 'exact', head: true });
             const { count: sessionCount } = await supabase.from('voting_sessions').select('*', { count: 'exact', head: true }).eq('status', 'open_for_voting');
             const { count: pendingCount } = await supabase.from('menu_items').select('*', { count: 'exact', head: true }).eq('approval_status', 'pending');
@@ -79,9 +88,25 @@ const AdminDashboard = () => {
         }
 
         try {
-            const { error } = await supabase.from('voting_sessions').insert({ title: title.trim(), start_date: startDate, end_date: endDate, session_weeks: Number(sessionWeeks) === 1 ? 1 : 2, status: 'draft' });
+            const bLim = Number(breakfastLimit) > 0 ? Number(breakfastLimit) : 3;
+            const lLim = Number(lunchLimit) > 0 ? Number(lunchLimit) : 6;
+            const sLim = Number(snacksLimit) > 0 ? Number(snacksLimit) : 2;
+            const dLim = Number(dinnerLimit) > 0 ? Number(dinnerLimit) : 6;
+
+            const { error } = await supabase.from('voting_sessions').insert({
+                title: title.trim(),
+                start_date: startDate,
+                end_date: endDate,
+                session_weeks: Number(sessionWeeks) === 1 ? 1 : 2,
+                breakfast_limit: bLim,
+                lunch_limit: lLim,
+                snacks_limit: sLim,
+                dinner_limit: dLim,
+                status: 'draft'
+            });
             if (error) throw error;
             setShowCreate(false); setTitle(''); setStartDate(''); setEndDate(''); setSessionWeeks(2);
+            setBreakfastLimit(3); setLunchLimit(6); setSnacksLimit(2); setDinnerLimit(6);
             fetchSessions();
             toast.success('Voting session created successfully in Draft mode!');
         } catch (error) { toast.error('Error creating session'); }
@@ -110,7 +135,8 @@ const AdminDashboard = () => {
             const { data, error } = await supabase
                 .from('feedbacks')
                 .select('caterer_id, caterer:profiles!caterer_id(full_name)')
-                .is('response', null);
+                .is('response', null)
+                .or('reviewed_by_ai.is.null,reviewed_by_ai.eq.false');
 
             if (error) throw error;
 
@@ -154,6 +180,10 @@ const AdminDashboard = () => {
             <div className="flex gap-4 border-b border-gray-200">
                 <button onClick={() => setActiveTab('sessions')} className={`pb-3 font-medium px-2 transition-all ${activeTab === 'sessions' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>Voting Sessions</button>
                 <button onClick={() => setActiveTab('approvals')} className={`pb-3 font-medium px-2 transition-all flex items-center gap-2 ${activeTab === 'approvals' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>Pending Approvals{stats.pendingApprovals > 0 && (<span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">{stats.pendingApprovals}</span>)}</button>
+                <button onClick={() => setActiveTab('feedback')} className={`pb-3 font-medium px-2 transition-all flex items-center gap-2 ${activeTab === 'feedback' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <MessageSquare size={16} /> Live Feedback
+                    {stats.pendingFeedbacks > 0 && (<span className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">{stats.pendingFeedbacks}</span>)}
+                </button>
                 <button onClick={() => setActiveTab('caterers')} className={`pb-3 font-medium px-2 transition-all ${activeTab === 'caterers' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>Manage Caterers</button>
             </div>
 
@@ -176,26 +206,114 @@ const AdminDashboard = () => {
                 <>
                     {showCreate && (
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6 animate-fade-in relative z-20">
-                            <h3 className="font-semibold text-gray-800">Create New Voting Session</h3>
-                            <p className="text-sm text-gray-500 mb-4">Sessions start in <strong>Draft</strong> mode so caterers can plan the menu before admin approves items.</p>
-                            <form onSubmit={createSession} className="flex flex-col md:flex-row gap-4 items-end flex-wrap">
-                                <div className="flex-1 min-w-[180px]"><label className="block text-sm font-medium text-gray-700 mb-1">Title</label><input type="text" required placeholder="e.g. March Week 1" className="w-full px-3 py-2 border rounded-lg" value={title} onChange={e => setTitle(e.target.value)} /></div>
-                                <div className="w-full md:w-48"><label className="block text-sm font-medium text-gray-700 mb-1">Menu Cycle</label><CustomSelect value={sessionWeeks} onChange={val => setSessionWeeks(Number(val))} options={[{value: 1, label: '1 Week (Mon-Sun)'}, {value: 2, label: '2 Weeks (Mon Wk1 - Sun Wk2)'}]} /></div>
-                                <div className="w-full md:w-44"><label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label><input type="date" required className="w-full px-3 py-2 border rounded-lg" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
-                                <div className="w-full md:w-44"><label className="block text-sm font-medium text-gray-700 mb-1">End Date</label><input type="date" required className="w-full px-3 py-2 border rounded-lg" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
-                                <div className="flex gap-2"><button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button><button type="submit" className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700">Create</button></div>
+                            <h3 className="font-semibold text-gray-800 text-lg mb-1">Create New Voting Session</h3>
+                            <p className="text-sm text-gray-500 mb-5">Set dates and configure required items per meal. Top-voted items matching these amounts will be preselected, and student voting will be limited accordingly.</p>
+                            <form onSubmit={createSession} className="space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="sm:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Title *</label>
+                                        <input type="text" required placeholder="e.g. August 2026 Cycle 1" className="w-full px-3 py-2 border rounded-lg" value={title} onChange={e => setTitle(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Menu Cycle *</label>
+                                        <CustomSelect value={sessionWeeks} onChange={val => setSessionWeeks(Number(val))} options={[{value: 1, label: '1 Week (Mon-Sun)'}, {value: 2, label: '2 Weeks (14 Days)'}]} />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <div className="flex-1">
+                                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Start Date *</label>
+                                            <input type="date" required className="w-full px-3 py-2 border rounded-lg text-sm" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">End Date *</label>
+                                            <input type="date" required className="w-full px-3 py-2 border rounded-lg text-sm" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Meal Target Limits */}
+                                <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                                    <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                        <TrendingUp size={14} /> Required Items Per Meal (Daily Targets & Voting Limits)
+                                    </h4>
+                                    <p className="text-xs text-indigo-700/80 mb-3">
+                                        Specify how many items are needed for each meal per day. These top-voted dishes will be preselected during finalization, and students will be restricted to vote only for these amounts per day.
+                                    </p>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        <div className="bg-white p-3 rounded-lg border border-indigo-100">
+                                            <label className="block text-xs font-bold text-gray-600 mb-1">🌅 Breakfast</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="15"
+                                                required
+                                                className="w-full px-2.5 py-1.5 border rounded-md text-sm font-semibold text-gray-800"
+                                                value={breakfastLimit}
+                                                onChange={e => setBreakfastLimit(Number(e.target.value))}
+                                            />
+                                        </div>
+                                        <div className="bg-white p-3 rounded-lg border border-indigo-100">
+                                            <label className="block text-xs font-bold text-gray-600 mb-1">☀️ Lunch</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="15"
+                                                required
+                                                className="w-full px-2.5 py-1.5 border rounded-md text-sm font-semibold text-gray-800"
+                                                value={lunchLimit}
+                                                onChange={e => setLunchLimit(Number(e.target.value))}
+                                            />
+                                        </div>
+                                        <div className="bg-white p-3 rounded-lg border border-indigo-100">
+                                            <label className="block text-xs font-bold text-gray-600 mb-1">🍪 Snacks</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="15"
+                                                required
+                                                className="w-full px-2.5 py-1.5 border rounded-md text-sm font-semibold text-gray-800"
+                                                value={snacksLimit}
+                                                onChange={e => setSnacksLimit(Number(e.target.value))}
+                                            />
+                                        </div>
+                                        <div className="bg-white p-3 rounded-lg border border-indigo-100">
+                                            <label className="block text-xs font-bold text-gray-600 mb-1">🌙 Dinner</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="15"
+                                                required
+                                                className="w-full px-2.5 py-1.5 border rounded-md text-sm font-semibold text-gray-800"
+                                                value={dinnerLimit}
+                                                onChange={e => setDinnerLimit(Number(e.target.value))}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+                                    <button type="submit" className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700 font-medium shadow-md">Create Session</button>
+                                </div>
                             </form>
                         </div>
                     )}
                     <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 animate-slide-up">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
-                                <thead className="bg-gray-50 text-gray-500 text-sm"><tr><th className="px-6 py-4 font-medium">Title</th><th className="px-6 py-4 font-medium">Dates</th><th className="px-6 py-4 font-medium">Votes</th><th className="px-6 py-4 font-medium">Status</th><th className="px-6 py-4 font-medium text-right">Actions</th></tr></thead>
+                                <thead className="bg-gray-50 text-gray-500 text-sm"><tr><th className="px-6 py-4 font-medium">Title</th><th className="px-6 py-4 font-medium">Dates</th><th className="px-6 py-4 font-medium">Meal Limits</th><th className="px-6 py-4 font-medium">Votes</th><th className="px-6 py-4 font-medium">Status</th><th className="px-6 py-4 font-medium text-right">Actions</th></tr></thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {sessions.map((session) => (
                                         <tr key={session.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 font-medium text-gray-900"><div className="flex items-center gap-2">{session.title}{weekBadge(session.week_label)}</div></td>
                                             <td className="px-6 py-4 text-gray-500 text-sm">{new Date(session.start_date).toLocaleDateString()} - {new Date(session.end_date).toLocaleDateString()}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="text-xs text-gray-600 flex gap-1.5 flex-wrap">
+                                                    <span className="bg-gray-100 px-2 py-0.5 rounded font-mono" title="Breakfast Limit">B: {session.breakfast_limit || 3}</span>
+                                                    <span className="bg-gray-100 px-2 py-0.5 rounded font-mono" title="Lunch Limit">L: {session.lunch_limit || 6}</span>
+                                                    <span className="bg-gray-100 px-2 py-0.5 rounded font-mono" title="Snacks Limit">S: {session.snacks_limit || 2}</span>
+                                                    <span className="bg-gray-100 px-2 py-0.5 rounded font-mono" title="Dinner Limit">D: {session.dinner_limit || 6}</span>
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4"><VoteCount sessionId={session.id} /></td>
                                             <td className="px-6 py-4"><span className={`px-2 py-1 text-xs rounded-full font-medium capitalize ${session.status === 'open_for_voting' ? 'bg-green-100 text-green-800' : session.status === 'finalized' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>{session.status.replace('_', ' ')}</span></td>
                                             <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
@@ -216,6 +334,8 @@ const AdminDashboard = () => {
                 </>
             ) : activeTab === 'approvals' ? (
                 <PendingApprovals onApproved={fetchStats} />
+            ) : activeTab === 'feedback' ? (
+                <AdminLiveFeedbackPanel />
             ) : (
                 <CatererManager />
             )}
@@ -340,20 +460,53 @@ const FinalizeMenuModal = ({ session, onClose }) => {
     const [saving, setSaving] = useState(false);
     const allSelected = items.length > 0 && items.every((item) => item.is_selected);
 
+    const defaultLimits = { breakfast: 3, lunch: 6, snacks: 2, dinner: 6 };
+    const getMealLimit = (mealType) => {
+        const key = `${mealType}_limit`;
+        return Number(session?.[key]) > 0 ? Number(session[key]) : (defaultLimits[mealType] || 4);
+    };
+
+    const applyTopVotedSelections = (itemsList) => {
+        const groups = {};
+        itemsList.forEach((i) => {
+            const key = `${i.date_served}-${i.meal_type}-${i.mess_type}`;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(i);
+        });
+
+        const selectedIds = new Set();
+        Object.values(groups).forEach((slotItems) => {
+            const mealType = slotItems[0]?.meal_type || 'breakfast';
+            const limit = getMealLimit(mealType);
+            const sorted = [...slotItems].sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0) || a.name.localeCompare(b.name));
+            sorted.slice(0, limit).forEach(i => selectedIds.add(i.id));
+        });
+
+        return itemsList.map(i => ({ ...i, is_selected: selectedIds.has(i.id) }));
+    };
+
     useEffect(() => {
         const fetchItems = async () => {
             const { data } = await supabase.from('menu_items').select('*, votes(count)').eq('session_id', session.id).eq('approval_status', 'approved');
             const formatted = (data || []).map((i) => ({ ...i, vote_count: i.votes?.[0]?.count || 0, is_selected: i.is_selected === true }));
-            const groups = {};
-            formatted.forEach((i) => { const key = `${i.date_served}-${i.meal_type}-${i.mess_type}`; if (!groups[key]) groups[key] = []; groups[key].push(i); });
-            Object.values(groups).forEach((slotItems) => { const hasSelectionInSlot = slotItems.some(i => i.is_selected); if (!hasSelectionInSlot) { const max = Math.max(...slotItems.map((i) => i.vote_count)); slotItems.forEach((i) => { if (i.vote_count === max && max > 0) i.is_selected = true; }); } });
-            setItems(formatted); setLoading(false);
+            
+            const hasExistingSelection = formatted.some(i => i.is_selected);
+            if (!hasExistingSelection) {
+                setItems(applyTopVotedSelections(formatted));
+            } else {
+                setItems(formatted);
+            }
+            setLoading(false);
         };
         fetchItems();
     }, [session.id]);
 
     const toggleSelection = (itemId) => setItems(prev => prev.map(i => i.id === itemId ? { ...i, is_selected: !i.is_selected } : i));
     const setAllSelections = (selected) => setItems(prev => prev.map(i => ({ ...i, is_selected: selected })));
+    const resetToTopVoted = () => {
+        setItems(prev => applyTopVotedSelections(prev));
+        toast.success('Preselected top-voted items according to session meal limits!');
+    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -384,31 +537,56 @@ const FinalizeMenuModal = ({ session, onClose }) => {
     return (
         <div className="fixed inset-0 bg-transparent backdrop-blur-md z-40 flex items-center justify-center p-4">
             <div className="bg-white/80 backdrop-blur-xl rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-scale-in border border-white/50">
-                <div className="p-6 border-b flex justify-between items-start bg-gray-50 rounded-t-xl">
+                <div className="p-6 border-b flex justify-between items-start bg-gray-50 rounded-t-xl flex-wrap gap-3">
                     <div>
                         <h3 className="text-xl font-bold text-gray-800">Finalize Menu</h3>
-                        <p className="text-sm text-gray-500">{session.title} • Only approved items shown</p>
+                        <p className="text-sm text-gray-500">{session.title} • Top-voted items preselected (Limits: B:{session.breakfast_limit || 3}, L:{session.lunch_limit || 6}, S:{session.snacks_limit || 2}, D:{session.dinner_limit || 6})</p>
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => setAllSelections(!allSelected)}
-                        disabled={loading || items.length === 0}
-                        className="px-4 py-2 text-xs font-bold rounded-lg border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                        {allSelected ? 'Unselect All' : 'Select All'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={resetToTopVoted}
+                            disabled={loading || items.length === 0}
+                            className="px-3 py-2 text-xs font-bold rounded-lg border border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                        >
+                            <TrendingUp size={14} /> Auto-Pick Top Voted
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setAllSelections(!allSelected)}
+                            disabled={loading || items.length === 0}
+                            className="px-3 py-2 text-xs font-bold rounded-lg border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+                        >
+                            {allSelected ? 'Unselect All' : 'Select All'}
+                        </button>
+                    </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-6 space-y-8">
                     {loading ? <div>Loading...</div> : Object.entries(grouped).sort().map(([key, groupItems]) => {
                         const [date, messType] = key.split(' | ');
                         return (
                             <div key={key}>
-                                <h4 className="font-bold text-gray-700 mb-3 py-2 border-b">{new Date(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}<span className="ml-2 px-2 py-0.5 rounded text-xs bg-gray-100 uppercase">{messType}</span></h4>
+                                <h4 className="font-bold text-gray-700 mb-3 py-2 border-b flex items-center justify-between">
+                                    <span>
+                                        {new Date(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                                        <span className="ml-2 px-2 py-0.5 rounded text-xs bg-gray-100 uppercase">{messType}</span>
+                                    </span>
+                                </h4>
                                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {groupItems.map((item) => (
-                                        <div key={item.id} onClick={() => toggleSelection(item.id)} className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all flex justify-between items-start gap-3 ${item.is_selected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 hover:border-gray-300'}`}>
-                                            <div className="flex-1"><div className="text-xs font-bold text-gray-400 uppercase mb-1">{item.meal_type}</div><div className="font-semibold text-gray-900 leading-tight mb-1">{item.name}</div><div className="text-xs text-gray-500">{item.description}</div></div>
-                                            <div className="text-center min-w-[3rem]"><div className="text-lg font-bold text-indigo-600">{item.vote_count}</div><div className="text-[10px] text-gray-400 uppercase font-bold">Votes</div></div>
+                                        <div key={item.id} onClick={() => toggleSelection(item.id)} className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all flex justify-between items-start gap-3 ${item.is_selected ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-300' : 'border-gray-100 hover:border-gray-300'}`}>
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-xs font-bold text-gray-400 uppercase">{item.meal_type}</span>
+                                                    <span className="text-[10px] text-gray-400">Target: {getMealLimit(item.meal_type)}</span>
+                                                </div>
+                                                <div className="font-semibold text-gray-900 leading-tight mb-1">{item.name}</div>
+                                                <div className="text-xs text-gray-500">{item.description}</div>
+                                            </div>
+                                            <div className="text-center min-w-[3rem]">
+                                                <div className="text-lg font-bold text-indigo-600">{item.vote_count}</div>
+                                                <div className="text-[10px] text-gray-400 uppercase font-bold">Votes</div>
+                                            </div>
                                             {item.is_selected && (<div className="absolute top-2 right-2 text-indigo-600 bg-white rounded-full p-0.5 shadow-sm"><Check size={14} strokeWidth={3} /></div>)}
                                         </div>
                                     ))}
@@ -422,6 +600,739 @@ const FinalizeMenuModal = ({ session, onClose }) => {
                     <button onClick={handleSave} disabled={saving} className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200">{saving ? 'Saving...' : 'Confirm & Finalize Menu'}</button>
                 </div>
             </div>
+        </div>
+    );
+};
+
+const ExportFeedbackModal = ({ caterers, onClose }) => {
+    const [exportRange, setExportRange] = useState('all'); // 'all', 'current_month', 'custom_month'
+    const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth());
+    const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+    const [selectedCaterer, setSelectedCaterer] = useState('all');
+    const [feedbackType, setFeedbackType] = useState('all');
+    const [exporting, setExporting] = useState(false);
+    const [previewCount, setPreviewCount] = useState(null);
+    const [loadingCount, setLoadingCount] = useState(false);
+
+    const months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const currentYear = new Date().getFullYear();
+    const years = [currentYear - 1, currentYear, currentYear + 1];
+
+    const fetchMatchingCount = useCallback(async () => {
+        setLoadingCount(true);
+        try {
+            let query = supabase.from('feedbacks').select('*', { count: 'exact', head: true });
+            
+            if (selectedCaterer !== 'all') {
+                query = query.eq('caterer_id', selectedCaterer);
+            }
+            if (feedbackType !== 'all') {
+                query = query.eq('feedback_type', feedbackType);
+            }
+            if (exportRange === 'current_month') {
+                const now = new Date();
+                const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+                query = query.gte('created_at', start + 'T00:00:00.000Z').lte('created_at', end + 'T23:59:59.999Z');
+            } else if (exportRange === 'custom_month') {
+                const start = new Date(selectedYear, selectedMonth, 1).toISOString().split('T')[0];
+                const end = new Date(selectedYear, selectedMonth + 1, 0).toISOString().split('T')[0];
+                query = query.gte('created_at', start + 'T00:00:00.000Z').lte('created_at', end + 'T23:59:59.999Z');
+            }
+
+            const { count, error } = await query;
+            if (error) throw error;
+            setPreviewCount(count || 0);
+        } catch (err) {
+            console.error('Count error:', err);
+            setPreviewCount(0);
+        } finally {
+            setLoadingCount(false);
+        }
+    }, [exportRange, selectedMonth, selectedYear, selectedCaterer, feedbackType]);
+
+    useEffect(() => {
+        fetchMatchingCount();
+    }, [fetchMatchingCount]);
+
+    const handleExport = async () => {
+        setExporting(true);
+        try {
+            let query = supabase
+                .from('feedbacks')
+                .select('*, student:profiles!student_id(full_name, reg_number, mess_type), caterer:profiles!caterer_id(full_name)')
+                .order('created_at', { ascending: false });
+
+            if (selectedCaterer !== 'all') {
+                query = query.eq('caterer_id', selectedCaterer);
+            }
+            if (feedbackType !== 'all') {
+                query = query.eq('feedback_type', feedbackType);
+            }
+            if (exportRange === 'current_month') {
+                const now = new Date();
+                const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+                query = query.gte('created_at', start + 'T00:00:00.000Z').lte('created_at', end + 'T23:59:59.999Z');
+            } else if (exportRange === 'custom_month') {
+                const start = new Date(selectedYear, selectedMonth, 1).toISOString().split('T')[0];
+                const end = new Date(selectedYear, selectedMonth + 1, 0).toISOString().split('T')[0];
+                query = query.gte('created_at', start + 'T00:00:00.000Z').lte('created_at', end + 'T23:59:59.999Z');
+            }
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            if (!data || data.length === 0) {
+                toast.error('No feedback records found for the selected criteria');
+                setExporting(false);
+                return;
+            }
+
+            const excelRows = data.map((fb, idx) => ({
+                'S.No': idx + 1,
+                'Feedback Date': fb.feedback_date || (fb.created_at ? new Date(fb.created_at).toLocaleDateString('en-IN') : 'N/A'),
+                'Day': fb.day_label || (fb.created_at ? new Date(fb.created_at).toLocaleDateString('en-US', { weekday: 'long' }) : 'N/A'),
+                'Meal Type': fb.meal_type ? fb.meal_type.toUpperCase() : 'GENERAL',
+                'Feedback Type': fb.feedback_type === 'daily_food' ? 'Daily Food Feedback' : 'General Feedback',
+                'Caterer Name': fb.caterer?.full_name || 'N/A',
+                'Student Name': fb.student?.full_name || 'Anonymous Student',
+                'Student Reg Number': fb.student?.reg_number || 'N/A',
+                'Student Mess Type': fb.student?.mess_type ? fb.student.mess_type.replace('_', ' ').toUpperCase() : 'N/A',
+                'Feedback Message': fb.message || '',
+                'Photo Attached': fb.image_url ? 'YES' : 'NO',
+                'Photo URL': fb.image_url || '',
+                'Caterer Response': fb.response || 'Pending Response',
+                'Response Status': fb.response ? 'Responded' : 'Pending',
+                'Submitted At': fb.created_at ? new Date(fb.created_at).toLocaleString('en-IN') : 'N/A',
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(excelRows);
+            ws['!cols'] = [
+                { wch: 6 },  // S.No
+                { wch: 14 }, // Feedback Date
+                { wch: 12 }, // Day
+                { wch: 12 }, // Meal Type
+                { wch: 22 }, // Feedback Type
+                { wch: 22 }, // Caterer Name
+                { wch: 24 }, // Student Name
+                { wch: 18 }, // Student Reg Number
+                { wch: 18 }, // Student Mess Type
+                { wch: 50 }, // Feedback Message
+                { wch: 14 }, // Photo Attached
+                { wch: 35 }, // Photo URL
+                { wch: 35 }, // Caterer Response
+                { wch: 16 }, // Response Status
+                { wch: 22 }, // Submitted At
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Feedbacks');
+
+            let rangeLabel = 'All_Time';
+            if (exportRange === 'current_month') {
+                rangeLabel = `${months[new Date().getMonth()]}_${new Date().getFullYear()}`;
+            } else if (exportRange === 'custom_month') {
+                rangeLabel = `${months[selectedMonth]}_${selectedYear}`;
+            }
+            const fileName = `FeastFull_Feedbacks_${rangeLabel}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+            XLSX.writeFile(wb, fileName);
+            toast.success(`Exported ${excelRows.length} feedbacks to ${fileName}!`);
+            onClose();
+        } catch (err) {
+            console.error('Export error:', err);
+            toast.error('Failed to export feedback: ' + (err.message || 'Unknown error'));
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-transparent backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl w-full max-w-lg animate-scale-in border border-white/60 overflow-hidden">
+                <div className="p-6 border-b bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex justify-between items-center">
+                    <div className="flex items-center gap-2.5">
+                        <FileSpreadsheet className="w-6 h-6" />
+                        <div>
+                            <h3 className="text-lg font-bold">Export Feedbacks to Excel</h3>
+                            <p className="text-xs text-emerald-100">Download formatted .xlsx report</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div className="p-6 space-y-5">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Time Scope</label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {[
+                                { id: 'all', label: 'Whole History' },
+                                { id: 'current_month', label: 'Current Month' },
+                                { id: 'custom_month', label: 'Select Month' }
+                            ].map(opt => (
+                                <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => setExportRange(opt.id)}
+                                    className={`py-2.5 px-2 rounded-xl text-xs font-bold border transition-all text-center ${
+                                        exportRange === opt.id
+                                            ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm'
+                                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {exportRange === 'custom_month' && (
+                        <div className="flex gap-3 bg-emerald-50/50 p-3.5 rounded-xl border border-emerald-100 animate-slide-down">
+                            <div className="flex-1">
+                                <label className="block text-xs font-bold text-emerald-800 mb-1">Month</label>
+                                <CustomSelect
+                                    value={selectedMonth}
+                                    onChange={val => setSelectedMonth(Number(val))}
+                                    options={months.map((m, idx) => ({ value: idx, label: m }))}
+                                />
+                            </div>
+                            <div className="w-28">
+                                <label className="block text-xs font-bold text-emerald-800 mb-1">Year</label>
+                                <CustomSelect
+                                    value={selectedYear}
+                                    onChange={val => setSelectedYear(Number(val))}
+                                    options={years.map(y => ({ value: y, label: String(y) }))}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Caterer</label>
+                        <CustomSelect
+                            value={selectedCaterer}
+                            onChange={val => setSelectedCaterer(val)}
+                            options={[
+                                { value: 'all', label: '🏢 All Caterers' },
+                                ...caterers.map(c => ({ value: c.id, label: c.full_name }))
+                            ]}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Feedback Type</label>
+                        <CustomSelect
+                            value={feedbackType}
+                            onChange={val => setFeedbackType(val)}
+                            options={[
+                                { value: 'all', label: '📋 All Feedback Types' },
+                                { value: 'daily_food', label: "🍽️ Today's Daily Food Feedback" },
+                                { value: 'general', label: '💬 General Feedback' }
+                            ]}
+                        />
+                    </div>
+
+                    <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 flex items-center justify-between text-xs text-gray-600">
+                        <span>Records to export:</span>
+                        <span className="font-bold text-sm text-gray-900">
+                            {loadingCount ? 'Counting...' : `${previewCount ?? 0} record${previewCount !== 1 ? 's' : ''}`}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="p-4 border-t bg-gray-50/80 rounded-b-2xl flex justify-end gap-3">
+                    <button
+                        onClick={onClose}
+                        className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-xl font-medium transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleExport}
+                        disabled={exporting || loadingCount || previewCount === 0}
+                        className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-bold hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-emerald-200 transition-all"
+                    >
+                        {exporting ? (
+                            <>
+                                <Loader2 size={16} className="animate-spin" /> Generating...
+                            </>
+                        ) : (
+                            <>
+                                <Download size={16} /> Download Excel (.xlsx)
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const AdminLiveFeedbackPanel = () => {
+    const [feedbacks, setFeedbacks] = useState([]);
+    const [caterers, setCaterers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedCaterer, setSelectedCaterer] = useState('all');
+    const [feedbackType, setFeedbackType] = useState('all');
+    const [selectedMeal, setSelectedMeal] = useState('all');
+    const [selectedDate, setSelectedDate] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [expandedImage, setExpandedImage] = useState(null);
+    const [summaryLoading, setSummaryLoading] = useState(false);
+    const [summaryText, setSummaryText] = useState('');
+    const [showSummaryModal, setShowSummaryModal] = useState(false);
+    const [replyInputs, setReplyInputs] = useState({});
+    const [submittingReply, setSubmittingReply] = useState(null);
+
+    useEffect(() => {
+        supabase.from('profiles').select('id, full_name').eq('role', 'caterer')
+            .then(({ data }) => setCaterers(data || []));
+    }, []);
+
+    const fetchFeedbacks = useCallback(async () => {
+        setLoading(true);
+        try {
+            let query = supabase
+                .from('feedbacks')
+                .select('*, student:profiles!student_id(full_name, reg_number, mess_type), caterer:profiles!caterer_id(full_name)')
+                .order('created_at', { ascending: false });
+
+            if (selectedCaterer !== 'all') query = query.eq('caterer_id', selectedCaterer);
+            if (feedbackType !== 'all') query = query.eq('feedback_type', feedbackType);
+            if (selectedMeal !== 'all') query = query.eq('meal_type', selectedMeal);
+            if (selectedDate) query = query.eq('feedback_date', selectedDate);
+            if (statusFilter === 'pending') query = query.is('response', null).or('reviewed_by_ai.is.null,reviewed_by_ai.eq.false');
+            if (statusFilter === 'ai_reviewed') query = query.is('response', null).eq('reviewed_by_ai', true);
+            if (statusFilter === 'responded') query = query.not('response', 'is', null);
+
+            const { data, error } = await query;
+            if (error) throw error;
+            setFeedbacks(data || []);
+        } catch (err) {
+            console.error('Error fetching feedbacks:', err);
+            toast.error('Failed to load feedbacks');
+        } finally {
+            setLoading(false);
+        }
+    }, [selectedCaterer, feedbackType, selectedMeal, selectedDate, statusFilter]);
+
+    useEffect(() => {
+        fetchFeedbacks();
+    }, [fetchFeedbacks]);
+
+    const handleAISummarize = async () => {
+        if (feedbacks.length === 0) {
+            toast.error('No feedbacks available in current filter to summarize');
+            return;
+        }
+        setSummaryLoading(true);
+        setShowSummaryModal(true);
+        setSummaryText('');
+        try {
+            const res = await axios.post(`${API_URL}/api/ai/summarize-daily-feedback`, {
+                feedbacks: feedbacks.slice(0, 50),
+                date: selectedDate || 'Selected Period',
+                mealType: selectedMeal !== 'all' ? selectedMeal : 'all',
+            });
+            setSummaryText(res.data.summary);
+        } catch (err) {
+            setSummaryText('Failed to generate summary: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setSummaryLoading(false);
+        }
+    };
+
+    const handleAdminReply = async (feedbackId) => {
+        const reply = replyInputs[feedbackId]?.trim();
+        if (!reply) return;
+        setSubmittingReply(feedbackId);
+        try {
+            const { error } = await supabase.from('feedbacks').update({ response: reply }).eq('id', feedbackId);
+            if (error) throw error;
+            toast.success('Response saved!');
+            setReplyInputs(prev => ({ ...prev, [feedbackId]: '' }));
+            fetchFeedbacks();
+        } catch (err) {
+            toast.error('Failed to save response: ' + err.message);
+        } finally {
+            setSubmittingReply(null);
+        }
+    };
+
+    const handleDeleteFeedback = async (feedbackId) => {
+        if (!confirm('Are you sure you want to delete this feedback?')) return;
+        try {
+            const { error } = await supabase.from('feedbacks').delete().eq('id', feedbackId);
+            if (error) throw error;
+            toast.success('Feedback deleted');
+            setFeedbacks(prev => prev.filter(f => f.id !== feedbackId));
+        } catch (err) {
+            toast.error('Failed to delete feedback');
+        }
+    };
+
+    const filteredFeedbacks = feedbacks.filter(fb => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+            fb.message?.toLowerCase().includes(q) ||
+            fb.student?.full_name?.toLowerCase().includes(q) ||
+            fb.student?.reg_number?.toLowerCase().includes(q) ||
+            fb.caterer?.full_name?.toLowerCase().includes(q) ||
+            fb.meal_type?.toLowerCase().includes(q) ||
+            fb.day_label?.toLowerCase().includes(q)
+        );
+    });
+
+    const pendingCount = feedbacks.filter(f => !f.response && !f.reviewed_by_ai).length;
+    const aiReviewedCount = feedbacks.filter(f => !f.response && f.reviewed_by_ai).length;
+    const respondedCount = feedbacks.filter(f => f.response).length;
+    const withPhotoCount = feedbacks.filter(f => f.image_url).length;
+
+    return (
+        <div className="space-y-6 animate-fade-in">
+            {/* Header & Action Controls */}
+            <div className="bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h3 className="text-2xl font-bold flex items-center gap-2.5">
+                        <MessageSquare className="w-7 h-7" /> Live Feedback Feed
+                    </h3>
+                    <p className="text-sm opacity-90 mt-1">
+                        Monitor real-time student food ratings, photos, caterer responses, and export Excel reports.
+                    </p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                    <button
+                        onClick={handleAISummarize}
+                        disabled={feedbacks.length === 0}
+                        className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white py-2 px-4 rounded-xl font-bold text-sm transition-all flex items-center gap-2 border border-white/20 shadow-sm disabled:opacity-50"
+                    >
+                        <Sparkles size={16} /> AI Summary
+                    </button>
+                    <button
+                        onClick={() => setShowExportModal(true)}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white py-2 px-4 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shadow-lg shadow-emerald-900/20"
+                    >
+                        <FileSpreadsheet size={16} /> Export to Excel
+                    </button>
+                </div>
+            </div>
+
+            {/* Stats Overview */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
+                    <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl"><MessageCircle size={20} /></div>
+                    <div>
+                        <p className="text-xs text-gray-500 font-medium">Total Feedback</p>
+                        <h4 className="text-lg font-bold text-gray-900">{feedbacks.length}</h4>
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
+                    <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl"><Clock size={20} /></div>
+                    <div>
+                        <p className="text-xs text-gray-500 font-medium">Pending Action</p>
+                        <h4 className="text-lg font-bold text-orange-600">{pendingCount}</h4>
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
+                    <div className="p-2.5 bg-purple-50 text-purple-600 rounded-xl"><Sparkles size={20} /></div>
+                    <div>
+                        <p className="text-xs text-gray-500 font-medium">AI Reviewed</p>
+                        <h4 className="text-lg font-bold text-purple-600">{aiReviewedCount}</h4>
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
+                    <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl"><CheckCircle size={20} /></div>
+                    <div>
+                        <p className="text-xs text-gray-500 font-medium">Responded</p>
+                        <h4 className="text-lg font-bold text-emerald-600">{respondedCount}</h4>
+                    </div>
+                </div>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm space-y-4">
+                <div className="flex items-center justify-between gap-2 border-b pb-3">
+                    <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                        <Filter size={16} className="text-primary" /> Filter Options
+                    </div>
+                    {(selectedCaterer !== 'all' || feedbackType !== 'all' || selectedMeal !== 'all' || selectedDate || statusFilter !== 'all' || searchQuery) && (
+                        <button
+                            onClick={() => {
+                                setSelectedCaterer('all');
+                                setFeedbackType('all');
+                                setSelectedMeal('all');
+                                setSelectedDate('');
+                                setStatusFilter('all');
+                                setSearchQuery('');
+                            }}
+                            className="text-xs text-primary font-semibold hover:underline"
+                        >
+                            Reset All Filters
+                        </button>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                    <div>
+                        <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Caterer</label>
+                        <CustomSelect
+                            value={selectedCaterer}
+                            onChange={val => setSelectedCaterer(val)}
+                            options={[
+                                { value: 'all', label: 'All Caterers' },
+                                ...caterers.map(c => ({ value: c.id, label: c.full_name }))
+                            ]}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Type</label>
+                        <CustomSelect
+                            value={feedbackType}
+                            onChange={val => setFeedbackType(val)}
+                            options={[
+                                { value: 'all', label: 'All Types' },
+                                { value: 'daily_food', label: "Daily Food" },
+                                { value: 'general', label: 'General' }
+                            ]}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Meal</label>
+                        <CustomSelect
+                            value={selectedMeal}
+                            onChange={val => setSelectedMeal(val)}
+                            options={[
+                                { value: 'all', label: 'All Meals' },
+                                { value: 'breakfast', label: 'Breakfast' },
+                                { value: 'lunch', label: 'Lunch' },
+                                { value: 'snacks', label: 'Snacks' },
+                                { value: 'dinner', label: 'Dinner' }
+                            ]}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Status</label>
+                        <CustomSelect
+                            value={statusFilter}
+                            onChange={val => setStatusFilter(val)}
+                            options={[
+                                { value: 'all', label: 'All Status' },
+                                { value: 'pending', label: '⏳ Pending Action' },
+                                { value: 'ai_reviewed', label: '🤖 AI Reviewed' },
+                                { value: 'responded', label: '✓ Responded' }
+                            ]}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Date</label>
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={e => setSelectedDate(e.target.value)}
+                            className="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Search</label>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                placeholder="Student, reg #, dish..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="w-full pl-8 pr-3 py-2 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                            <Search size={14} className="absolute left-2.5 top-3 text-gray-400" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Feedbacks List */}
+            {loading ? (
+                <div className="text-center py-16 bg-white rounded-xl border border-gray-100">
+                    <Loader2 size={36} className="animate-spin text-primary mx-auto mb-3" />
+                    <p className="text-sm text-gray-500">Loading student feedbacks...</p>
+                </div>
+            ) : filteredFeedbacks.length === 0 ? (
+                <div className="text-center py-16 bg-white rounded-xl border border-gray-100">
+                    <MessageSquare size={48} className="mx-auto text-gray-300 mb-3" />
+                    <h4 className="text-base font-bold text-gray-700">No Feedback Matches Found</h4>
+                    <p className="text-sm text-gray-400 mt-1">Try adjusting the filter criteria or check back later.</p>
+                </div>
+            ) : (
+                <div className="grid gap-4">
+                    {filteredFeedbacks.map(fb => (
+                        <div key={fb.id} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
+                                        {fb.student?.full_name?.[0] || 'S'}
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="font-bold text-gray-900">{fb.student?.full_name || 'Anonymous Student'}</span>
+                                            {fb.student?.reg_number && (
+                                                <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md font-mono">
+                                                    {fb.student.reg_number}
+                                                </span>
+                                            )}
+                                            {fb.student?.mess_type && (
+                                                <span className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full capitalize font-medium">
+                                                    {fb.student.mess_type.replace('_', ' ')}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            Assigned Caterer: <strong className="text-gray-600">{fb.caterer?.full_name || 'N/A'}</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap text-xs">
+                                    <span className={`px-2 py-0.5 rounded-full font-bold uppercase ${
+                                        fb.feedback_type === 'daily_food' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                                    }`}>
+                                        {fb.feedback_type === 'daily_food' ? '🍽️ Daily Food' : '💬 General'}
+                                    </span>
+                                    {fb.meal_type && (
+                                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full capitalize font-medium">
+                                            {fb.meal_type}
+                                        </span>
+                                    )}
+                                    {fb.response ? (
+                                        <span className="px-2 py-0.5 rounded-full font-bold uppercase bg-emerald-100 text-emerald-800">
+                                            ✓ Responded
+                                        </span>
+                                    ) : fb.reviewed_by_ai ? (
+                                        <span className="px-2 py-0.5 rounded-full font-bold uppercase bg-purple-100 text-purple-800 flex items-center gap-1">
+                                            <Sparkles size={11} /> AI Reviewed
+                                        </span>
+                                    ) : (
+                                        <span className="px-2 py-0.5 rounded-full font-bold uppercase bg-orange-100 text-orange-800">
+                                            ⏳ Pending
+                                        </span>
+                                    )}
+                                    <span className="text-gray-400">
+                                        {fb.feedback_date || (fb.created_at ? new Date(fb.created_at).toLocaleDateString() : '')} {fb.day_label ? `(${fb.day_label})` : ''}
+                                    </span>
+                                    <button
+                                        onClick={() => handleDeleteFeedback(fb.id)}
+                                        title="Delete Feedback"
+                                        className="text-gray-300 hover:text-red-500 p-1 transition-colors"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <p className="text-gray-700 text-sm bg-gray-50/80 p-3.5 rounded-xl border border-gray-100 leading-relaxed">
+                                &ldquo;{fb.message}&rdquo;
+                            </p>
+
+                            {fb.image_url && (
+                                <div className="mt-3 flex items-center gap-3">
+                                    <img
+                                        src={fb.image_url}
+                                        alt="Food"
+                                        className="w-16 h-16 object-cover rounded-lg border border-gray-200 cursor-pointer hover:scale-105 transition-transform"
+                                        onClick={() => setExpandedImage(fb.image_url)}
+                                    />
+                                    <button
+                                        onClick={() => setExpandedImage(fb.image_url)}
+                                        className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline"
+                                    >
+                                        <Eye size={14} /> View full photo
+                                    </button>
+                                </div>
+                            )}
+
+                            <div className="mt-4 pt-3 border-t border-gray-100">
+                                {fb.response ? (
+                                    <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex items-start gap-2.5 text-xs">
+                                        <CheckCircle size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="font-bold text-emerald-800 uppercase tracking-wide text-[10px]">Caterer Response</p>
+                                            <p className="text-emerald-900 text-sm mt-0.5">{fb.response}</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Write admin reply or note on caterer's behalf..."
+                                            value={replyInputs[fb.id] || ''}
+                                            onChange={e => setReplyInputs({ ...replyInputs, [fb.id]: e.target.value })}
+                                            className="flex-1 border rounded-lg px-3 py-1.5 text-xs bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none"
+                                        />
+                                        <button
+                                            onClick={() => handleAdminReply(fb.id)}
+                                            disabled={submittingReply === fb.id || !replyInputs[fb.id]}
+                                            className="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-1"
+                                        >
+                                            {submittingReply === fb.id ? 'Saving...' : <><Send size={12} /> Reply</>}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {expandedImage && (
+                <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" onClick={() => setExpandedImage(null)}>
+                    <div className="relative max-w-2xl max-h-[85vh]">
+                        <img src={expandedImage} alt="Food photo full" className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl" />
+                        <button onClick={() => setExpandedImage(null)} className="absolute -top-3 -right-3 bg-white text-gray-800 p-1.5 rounded-full shadow-lg hover:bg-gray-100">
+                            <X size={18} />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {showSummaryModal && (
+                <div className="fixed inset-0 bg-transparent backdrop-blur-md z-40 flex items-center justify-center p-4">
+                    <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-2xl w-full max-w-lg animate-scale-in border border-white/60">
+                        <div className="p-6 border-b bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-t-2xl flex justify-between items-center">
+                            <h3 className="text-lg font-bold flex items-center gap-2"><Sparkles size={20} />AI Feedback Analysis</h3>
+                            <button onClick={() => setShowSummaryModal(false)} className="p-1 hover:bg-white/20 rounded-full"><X size={20} /></button>
+                        </div>
+                        <div className="p-6 max-h-[70vh] overflow-y-auto">
+                            {summaryLoading ? (
+                                <div className="flex flex-col items-center py-8 text-gray-400">
+                                    <Loader2 size={36} className="animate-spin text-indigo-500 mb-3" />
+                                    <p className="text-sm font-medium">Gemini is analyzing student feedbacks...</p>
+                                </div>
+                            ) : (
+                                <div className="prose prose-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                    {summaryText}
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-4 border-t bg-gray-50 rounded-b-2xl flex justify-end">
+                            <button onClick={() => setShowSummaryModal(false)} className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-xl font-medium">Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showExportModal && (
+                <ExportFeedbackModal caterers={caterers} onClose={() => setShowExportModal(false)} />
+            )}
         </div>
     );
 };

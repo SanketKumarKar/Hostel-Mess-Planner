@@ -244,17 +244,36 @@ const VotingInterface = ({ session, onEditProfile }) => {
 
     useEffect(() => { if (profile?.mess_type) fetchItemsAndVotes(); }, [profile?.mess_type, fetchItemsAndVotes]);
 
+    const defaultLimits = { breakfast: 3, lunch: 6, snacks: 2, dinner: 6 };
+    const getMealLimit = (mealType) => {
+        const key = `${mealType}_limit`;
+        return Number(session?.[key]) > 0 ? Number(session[key]) : (defaultLimits[mealType] || 4);
+    };
+
     const handleVote = async (targetItem) => {
         const previousVotes = new Set(votes);
         const newVotes = new Set(votes);
         const isVoted = votes.has(targetItem.id);
-        if (isVoted) { newVotes.delete(targetItem.id); setVotes(newVotes); const { error } = await supabase.from('votes').delete().match({ user_id: profile?.id, menu_item_id: targetItem.id }); if (error) setVotes(previousVotes); }
-        else {
-            const currentDailyVotes = items.filter(i => i.date_served === targetItem.date_served && votes.has(i.id));
-            if (currentDailyVotes.length >= 8) { toast.error("You can only vote for up to 8 items per day."); return; }
-            newVotes.add(targetItem.id); setVotes(newVotes);
+        if (isVoted) {
+            newVotes.delete(targetItem.id);
+            setVotes(newVotes);
+            const { error } = await supabase.from('votes').delete().match({ user_id: profile?.id, menu_item_id: targetItem.id });
+            if (error) setVotes(previousVotes);
+        } else {
+            const mealType = targetItem.meal_type;
+            const limit = getMealLimit(mealType);
+            const currentMealVotes = items.filter(i => i.date_served === targetItem.date_served && i.meal_type === mealType && votes.has(i.id));
+            if (currentMealVotes.length >= limit) {
+                toast.error(`You can only vote for up to ${limit} ${mealType} items for this day.`);
+                return;
+            }
+            newVotes.add(targetItem.id);
+            setVotes(newVotes);
             const { error } = await supabase.from('votes').insert({ user_id: profile?.id, menu_item_id: targetItem.id });
-            if (error) { setVotes(previousVotes); toast.error(error.message || "Failed to cast vote"); }
+            if (error) {
+                setVotes(previousVotes);
+                toast.error(error.message || "Failed to cast vote");
+            }
         }
     };
 
@@ -274,17 +293,28 @@ const VotingInterface = ({ session, onEditProfile }) => {
                     <div className="grid gap-6">
                         {['breakfast', 'lunch', 'snacks', 'dinner'].map((mealType) => {
                             const options = meals[mealType]; if (!options?.length) return null;
+                            const currentMealVotesCount = options.filter(i => votes.has(i.id)).length;
+                            const limit = getMealLimit(mealType);
+                            const isMealFull = currentMealVotesCount >= limit;
                             return (
                                 <div key={mealType} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
-                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 sm:mb-4">{mealType}</h4>
+                                    <div className="flex justify-between items-center mb-3 sm:mb-4">
+                                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">{mealType}</h4>
+                                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold transition-colors ${isMealFull ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'}`}>
+                                            {currentMealVotesCount}/{limit} selected
+                                        </span>
+                                    </div>
                                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                                        {options.map((item) => { const isVoted = votes.has(item.id); return (
-                                            <div key={item.id} onClick={() => handleVote(item)} className={`relative cursor-pointer rounded-lg border-2 p-3 sm:p-4 transition-all group ${isVoted ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-gray-100 hover:border-gray-300 hover:shadow-md'}`}>
-                                                <div className="flex justify-between items-start mb-2"><h5 className="font-semibold text-gray-900">{item.name}</h5>{isVoted ? (<div className="bg-primary text-white p-1 rounded-full shadow-sm"><Check size={14} /></div>) : (<div className="w-6 h-6 rounded-full border-2 border-gray-200 group-hover:border-primary transition-colors" />)}</div>
-                                                <p className="text-sm text-gray-500 line-clamp-2 mb-3">{item.description}</p>
-                                                <button className={`w-full py-2 sm:py-1.5 rounded-lg text-sm font-medium transition-colors ${isVoted ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 group-hover:bg-primary group-hover:text-white'}`}>{isVoted ? 'Voted' : 'Vote'}</button>
-                                            </div>
-                                        ); })}
+                                        {options.map((item) => {
+                                            const isVoted = votes.has(item.id);
+                                            return (
+                                                <div key={item.id} onClick={() => handleVote(item)} className={`relative cursor-pointer rounded-lg border-2 p-3 sm:p-4 transition-all group ${isVoted ? 'border-primary bg-primary/5 ring-1 ring-primary' : isMealFull ? 'border-gray-100 opacity-80 hover:border-gray-200' : 'border-gray-100 hover:border-gray-300 hover:shadow-md'}`}>
+                                                    <div className="flex justify-between items-start mb-2"><h5 className="font-semibold text-gray-900">{item.name}</h5>{isVoted ? (<div className="bg-primary text-white p-1 rounded-full shadow-sm"><Check size={14} /></div>) : (<div className="w-6 h-6 rounded-full border-2 border-gray-200 group-hover:border-primary transition-colors" />)}</div>
+                                                    <p className="text-sm text-gray-500 line-clamp-2 mb-3">{item.description}</p>
+                                                    <button className={`w-full py-2 sm:py-1.5 rounded-lg text-sm font-medium transition-colors ${isVoted ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 group-hover:bg-primary group-hover:text-white'}`}>{isVoted ? 'Voted' : 'Vote'}</button>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             );

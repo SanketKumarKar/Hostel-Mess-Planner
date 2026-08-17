@@ -154,9 +154,6 @@ Be objective, professional, and actionable. Do not use bullet points - write in 
     router.post('/summarize-daily-feedback', async (req, res) => {
         try {
             const { catererId, date, mealType, feedbacks } = req.body;
-            if (!catererId) {
-                return res.status(400).json({ error: 'catererId is required' });
-            }
 
             if (!feedbacks || !Array.isArray(feedbacks)) {
                  return res.status(400).json({ error: 'feedbacks array is required' });
@@ -208,6 +205,19 @@ Keep it concise, direct, and actionable. Focus on specific food items mentioned 
             const result = await model.generateContent(prompt);
             const summary = result.response.text().trim();
 
+            // Mark these feedbacks as reviewed by AI in the database
+            const feedbackIds = feedbacks.map(fb => fb.id).filter(Boolean);
+            if (feedbackIds.length > 0) {
+                try {
+                    await supabase
+                        .from('feedbacks')
+                        .update({ reviewed_by_ai: true })
+                        .in('id', feedbackIds);
+                } catch (updateErr) {
+                    console.error('Error updating reviewed_by_ai status:', updateErr);
+                }
+            }
+
             res.json({
                 summary,
                 feedbackCount: feedbacks.length,
@@ -221,6 +231,7 @@ Keep it concise, direct, and actionable. Focus on specific food items mentioned 
                     mealType: fb.meal_type,
                     dayLabel: fb.day_label,
                     createdAt: fb.created_at,
+                    reviewedByAi: true,
                 })),
             });
         } catch (error) {

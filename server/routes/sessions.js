@@ -20,7 +20,7 @@ module.exports = (supabase) => {
     // Create session (Admin only)
     router.post('/', async (req, res) => {
         try {
-            const { title, start_date, end_date, session_weeks } = req.body;
+            const { title, start_date, end_date, session_weeks, breakfast_limit, lunch_limit, snacks_limit, dinner_limit } = req.body;
 
             // Backend validation
             if (!title || typeof title !== 'string' || !title.trim()) {
@@ -43,9 +43,24 @@ module.exports = (supabase) => {
             }
 
             const normalizedWeeks = Number(session_weeks) === 1 ? 1 : 2;
+            const bLimit = Number(breakfast_limit) > 0 ? Number(breakfast_limit) : 3;
+            const lLimit = Number(lunch_limit) > 0 ? Number(lunch_limit) : 6;
+            const sLimit = Number(snacks_limit) > 0 ? Number(snacks_limit) : 2;
+            const dLimit = Number(dinner_limit) > 0 ? Number(dinner_limit) : 6;
+
             const { data, error } = await supabase
                 .from('voting_sessions')
-                .insert({ title: title.trim(), start_date, end_date, session_weeks: normalizedWeeks, status: 'draft' })
+                .insert({
+                    title: title.trim(),
+                    start_date,
+                    end_date,
+                    session_weeks: normalizedWeeks,
+                    breakfast_limit: bLimit,
+                    lunch_limit: lLimit,
+                    snacks_limit: sLimit,
+                    dinner_limit: dLimit,
+                    status: 'draft'
+                })
                 .select()
                 .single();
 

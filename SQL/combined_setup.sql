@@ -50,15 +50,31 @@ CREATE TABLE IF NOT EXISTS public.voting_sessions (
   end_date date NOT NULL,
   title text,
   session_weeks integer NOT NULL DEFAULT 2,
+  breakfast_limit integer NOT NULL DEFAULT 3,
+  lunch_limit integer NOT NULL DEFAULT 6,
+  snacks_limit integer NOT NULL DEFAULT 2,
+  dinner_limit integer NOT NULL DEFAULT 6,
   status session_status DEFAULT 'draft',
   created_by uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
   CONSTRAINT check_dates CHECK (end_date >= start_date),
-  CONSTRAINT check_session_weeks CHECK (session_weeks IN (1, 2))
+  CONSTRAINT check_session_weeks CHECK (session_weeks IN (1, 2)),
+  CONSTRAINT check_breakfast_limit CHECK (breakfast_limit > 0),
+  CONSTRAINT check_lunch_limit CHECK (lunch_limit > 0),
+  CONSTRAINT check_snacks_limit CHECK (snacks_limit > 0),
+  CONSTRAINT check_dinner_limit CHECK (dinner_limit > 0)
 );
 
 ALTER TABLE public.voting_sessions
   ADD COLUMN IF NOT EXISTS session_weeks integer NOT NULL DEFAULT 2;
+ALTER TABLE public.voting_sessions
+  ADD COLUMN IF NOT EXISTS breakfast_limit integer NOT NULL DEFAULT 3;
+ALTER TABLE public.voting_sessions
+  ADD COLUMN IF NOT EXISTS lunch_limit integer NOT NULL DEFAULT 6;
+ALTER TABLE public.voting_sessions
+  ADD COLUMN IF NOT EXISTS snacks_limit integer NOT NULL DEFAULT 2;
+ALTER TABLE public.voting_sessions
+  ADD COLUMN IF NOT EXISTS dinner_limit integer NOT NULL DEFAULT 6;
 
 DO $$
 BEGIN
@@ -120,6 +136,7 @@ CREATE TABLE IF NOT EXISTS public.feedbacks (
   day_label text,            -- Day name e.g. 'Monday' (display purposes)
   image_url text,            -- Optional image URL uploaded via imgbb
   feedback_type text DEFAULT 'general', -- 'general' or 'daily_food'
+  reviewed_by_ai boolean DEFAULT FALSE, -- Marked true when reviewed/summarized by AI
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -129,6 +146,7 @@ ALTER TABLE public.feedbacks ADD COLUMN IF NOT EXISTS feedback_date date;
 ALTER TABLE public.feedbacks ADD COLUMN IF NOT EXISTS day_label text;
 ALTER TABLE public.feedbacks ADD COLUMN IF NOT EXISTS image_url text;
 ALTER TABLE public.feedbacks ADD COLUMN IF NOT EXISTS feedback_type text DEFAULT 'general';
+ALTER TABLE public.feedbacks ADD COLUMN IF NOT EXISTS reviewed_by_ai boolean DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_feedbacks_daily
   ON public.feedbacks (caterer_id, feedback_type, feedback_date, meal_type);
@@ -222,6 +240,11 @@ CREATE POLICY "Caterers can respond to feedback" ON public.feedbacks FOR UPDATE 
 
 DROP POLICY IF EXISTS "Admins can view all feedbacks" ON public.feedbacks;
 CREATE POLICY "Admins can view all feedbacks" ON public.feedbacks FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+DROP POLICY IF EXISTS "Admins can manage feedbacks" ON public.feedbacks;
+CREATE POLICY "Admins can manage feedbacks" ON public.feedbacks FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
