@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { Plus, X, Trash2, MessageSquare, Check, Settings, Sparkles, Loader2, Megaphone, Bell, RefreshCw, Utensils, Eye } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -36,7 +36,7 @@ const CatererDashboard = () => {
                     <button onClick={() => setShowSettings(true)} className="px-4 py-2 rounded-lg font-medium transition-colors text-gray-600 hover:bg-gray-100 border border-gray-200 flex items-center gap-2"><Settings size={18} />Profile Settings</button>
                     <button onClick={() => setActiveTab('menus')} className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'menus' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Menu Planning</button>
                     <button onClick={() => setActiveTab('announcements')} className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${activeTab === 'announcements' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Megaphone size={16} />Announcements</button>
-                    <button onClick={() => setActiveTab('daily_feedback')} className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${activeTab === 'daily_feedback' ? 'bg-amber-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Utensils size={16} />Today's Feedback</button>
+                    <button onClick={() => setActiveTab('daily_feedback')} className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${activeTab === 'daily_feedback' ? 'bg-amber-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Utensils size={16} />Today&apos;s Feedback</button>
                     <button onClick={() => setActiveTab('feedback')} className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'feedback' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Feedbacks</button>
                 </div>
             </div>
@@ -68,6 +68,7 @@ const CatererDashboard = () => {
 
 const MenuEditor = ({ session, onClose }) => {
     const slotOptions = buildSlotOptions(session.session_weeks);
+    const firstSlotValue = slotOptions[0]?.value;
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
     const [date, setDate] = useState(slotOptions[0]?.value || session.start_date);
@@ -88,7 +89,7 @@ const MenuEditor = ({ session, onClose }) => {
     }, [session.id]);
 
     useEffect(() => { fetchItems(); }, [fetchItems]);
-    useEffect(() => { if (slotOptions.length > 0) setDate(slotOptions[0].value); }, [session.id]);
+    useEffect(() => { if (firstSlotValue) setDate(firstSlotValue); }, [session.id, firstSlotValue]);
 
     const handleSubmit = async (e) => {
         e.preventDefault(); 
@@ -407,7 +408,7 @@ const FeedbackManager = () => {
 
     useEffect(() => { if (profile) fetchFeedbacks(); }, [profile, fetchFeedbacks]);
 
-    const handleResponse = async (feedbackId) => { const responseText = responseInput[feedbackId]; if (!responseText?.trim()) return; setSubmitting(feedbackId); try { const { error } = await supabase.from('feedbacks').update({ response: responseText }).eq('id', feedbackId); if (error) throw error; toast.success('Response sent!'); setResponseInput(prev => ({ ...prev, [feedbackId]: '' })); fetchFeedbacks(); } catch (error) { toast.error('Failed to send response'); } finally { setSubmitting(null); } };
+    const handleResponse = async (feedbackId) => { const responseText = responseInput[feedbackId]; if (!responseText?.trim()) return; setSubmitting(feedbackId); try { const { error } = await supabase.from('feedbacks').update({ response: responseText }).eq('id', feedbackId); if (error) throw error; toast.success('Response sent!'); setResponseInput(prev => ({ ...prev, [feedbackId]: '' })); fetchFeedbacks(); } catch { toast.error('Failed to send response'); } finally { setSubmitting(null); } };
 
     if (loading) return <div>Loading feedbacks...</div>;
     if (feedbacks.length === 0) return (<div className="text-center py-20 bg-white rounded-xl border border-gray-100"><MessageSquare size={48} className="mx-auto text-gray-300 mb-3" /><p className="text-gray-500">No feedbacks received yet.</p></div>);
@@ -504,7 +505,7 @@ const DailyFeedbackPanel = () => {
     return (
         <div className="space-y-6 animate-fade-in">
             <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-5 sm:p-6 text-white shadow-lg">
-                <h3 className="text-xl font-bold mb-1 flex items-center gap-2"><Utensils size={22} />Today's Food Feedback</h3>
+                <h3 className="text-xl font-bold mb-1 flex items-center gap-2"><Utensils size={22} />Today&apos;s Food Feedback</h3>
                 <p className="text-sm opacity-90">AI-powered summary of student feedback with improvement suggestions for each meal.</p>
             </div>
 

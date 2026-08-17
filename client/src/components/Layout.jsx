@@ -209,16 +209,10 @@ const ProfileSetupModal = ({ profile, onComplete }) => {
 const Layout = () => {
     const { signOut, profile } = useAuth();
     const navigate = useNavigate();
-    const [showSetup, setShowSetup] = useState(false);
+    const [dismissedSetupProfileId, setDismissedSetupProfileId] = useState(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-    // Check if the student profile is incomplete
-    useEffect(() => {
-        if (profile && profile.role === 'student') {
-            const needsSetup = !profile.reg_number || !profile.assigned_caterer_id || !profile.mess_type;
-            setShowSetup(needsSetup);
-        }
-    }, [profile]);
+    const profileNeedsSetup = profile?.role === 'student' && (!profile.reg_number || !profile.assigned_caterer_id || !profile.mess_type);
+    const showSetup = profileNeedsSetup && dismissedSetupProfileId !== profile.id;
 
     const handleSignOut = async () => {
         await signOut();
@@ -305,7 +299,7 @@ const Layout = () => {
             {showSetup && profile && (
                 <ProfileSetupModal
                     profile={profile}
-                    onComplete={() => setShowSetup(false)}
+                    onComplete={() => setDismissedSetupProfileId(profile.id)}
                 />
             )}
         </div>

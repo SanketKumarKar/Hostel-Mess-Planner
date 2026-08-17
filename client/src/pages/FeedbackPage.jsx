@@ -11,7 +11,6 @@ import CustomSelect from '../components/CustomSelect';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const FeedbackPage = () => {
-    const { profile } = useAuth();
     const [activeTab, setActiveTab] = useState('daily');
 
     return (
@@ -20,7 +19,7 @@ const FeedbackPage = () => {
                 <h2 className="text-xl sm:text-3xl font-bold mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3">
                     <MessageSquare className="w-5 h-5 sm:w-8 sm:h-8" /> Feedback Center
                 </h2>
-                <p className="opacity-90 text-xs sm:text-base">Share your thoughts on today's food or send general feedback to caterers.</p>
+                <p className="opacity-90 text-xs sm:text-base">Share your thoughts on today&apos;s food or send general feedback to caterers.</p>
             </div>
 
             {/* Tab Switcher */}
@@ -29,7 +28,7 @@ const FeedbackPage = () => {
                     onClick={() => setActiveTab('daily')}
                     className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-4 rounded-lg font-medium text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 sm:gap-2 ${activeTab === 'daily' ? 'bg-primary text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
                 >
-                    <Utensils size={14} className="sm:w-4 sm:h-4" /> Today's Food
+                    <Utensils size={14} className="sm:w-4 sm:h-4" /> Today&apos;s Food
                 </button>
                 <button
                     onClick={() => setActiveTab('general')}
@@ -56,11 +55,12 @@ const DailyFoodFeedback = () => {
     const [submitting, setSubmitting] = useState(false);
     const [loadingMenu, setLoadingMenu] = useState(true);
     const [todaysFeedbacks, setTodaysFeedbacks] = useState([]);
-    const [session, setSession] = useState(null);
+    const messType = profile?.mess_type;
+    const profileId = profile?.id;
 
     // Fetch today's menu from the finalized session
     const fetchTodayMenu = useCallback(async () => {
-        if (!profile?.mess_type) return;
+        if (!messType) return;
         setLoadingMenu(true);
         try {
             const { data: sessions } = await supabase
@@ -76,8 +76,6 @@ const DailyFoodFeedback = () => {
             }
 
             const activeSession = sessions[0];
-            setSession(activeSession);
-
             const slots = buildSlotOptions(activeSession.session_weeks);
             const todayDayIndex = new Date().getDay();
             const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -99,7 +97,7 @@ const DailyFoodFeedback = () => {
                 .select('*')
                 .eq('session_id', activeSession.id)
                 .is('is_selected', true)
-                .eq('mess_type', profile.mess_type)
+                .eq('mess_type', messType)
                 .eq('meal_type', selectedMeal)
                 .in('date_served', slotDates)
                 .order('name', { ascending: true });
@@ -110,21 +108,21 @@ const DailyFoodFeedback = () => {
         } finally {
             setLoadingMenu(false);
         }
-    }, [profile?.mess_type, selectedMeal]);
+    }, [messType, selectedMeal]);
 
     // Fetch existing feedbacks for today + selected meal
     const fetchTodaysFeedbacks = useCallback(async () => {
-        if (!profile) return;
+        if (!profileId) return;
         const { data } = await supabase
             .from('feedbacks')
             .select('*')
-            .eq('student_id', profile.id)
+            .eq('student_id', profileId)
             .eq('feedback_type', 'daily_food')
             .eq('feedback_date', defaultMealInfo.date)
             .eq('meal_type', selectedMeal)
             .order('created_at', { ascending: false });
         setTodaysFeedbacks(data || []);
-    }, [profile?.id, defaultMealInfo.date, selectedMeal]);
+    }, [profileId, defaultMealInfo.date, selectedMeal]);
 
     useEffect(() => { fetchTodayMenu(); fetchTodaysFeedbacks(); }, [fetchTodayMenu, fetchTodaysFeedbacks]);
 
@@ -233,10 +231,10 @@ const DailyFoodFeedback = () => {
 
             {/* Today's Menu Items */}
             {loadingMenu ? (
-                <div className="text-center py-6 text-gray-400 text-sm">Loading today's menu...</div>
+                <div className="text-center py-6 text-gray-400 text-sm">Loading today&apos;s menu...</div>
             ) : menuItems.length > 0 ? (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 sm:p-5">
-                    <h4 className="text-xs sm:text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 sm:mb-3">Today's {selectedMeal} Menu</h4>
+                    <h4 className="text-xs sm:text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 sm:mb-3">Today&apos;s {selectedMeal} Menu</h4>
                     <div className="flex flex-wrap gap-1.5 sm:gap-2">
                         {menuItems.map(item => (
                             <div key={item.id} className="bg-indigo-50 border border-indigo-100 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg">
@@ -248,7 +246,7 @@ const DailyFoodFeedback = () => {
                 </div>
             ) : (
                 <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 p-4 sm:p-6 text-center text-gray-400 text-xs sm:text-sm">
-                    No finalized menu items found for today's {selectedMeal}. Feedback can still be submitted.
+                    No finalized menu items found for today&apos;s {selectedMeal}. Feedback can still be submitted.
                 </div>
             )}
 
@@ -256,13 +254,13 @@ const DailyFoodFeedback = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
                 <h3 className="text-base sm:text-lg font-bold text-gray-800 mb-3 sm:mb-4 flex items-center gap-2">
                     <Send size={16} className="text-primary sm:w-[18px] sm:h-[18px]" />
-                    {alreadySubmitted ? 'Submit Additional Feedback' : 'Rate Today\'s Food'}
+                    {alreadySubmitted ? 'Submit Additional Feedback' : "Rate Today's Food"}
                 </h3>
 
                 {alreadySubmitted && (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-2.5 sm:p-3 mb-3 sm:mb-4 flex items-center gap-2 text-xs sm:text-sm text-green-700">
                         <CheckCircle size={14} className="shrink-0" />
-                        <span>You've already submitted feedback for this meal.</span>
+                        <span>You&apos;ve already submitted feedback for this meal.</span>
                     </div>
                 )}
 
@@ -341,7 +339,7 @@ const DailyFoodFeedback = () => {
                                 <span className="text-[10px] sm:text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium capitalize">{fb.meal_type} • {fb.day_label}</span>
                                 <span className="text-[10px] sm:text-xs text-gray-400">{new Date(fb.created_at).toLocaleTimeString()}</span>
                             </div>
-                            <p className="text-gray-700 text-xs sm:text-sm bg-gray-50 p-2.5 sm:p-3 rounded-lg border border-gray-100">"{fb.message}"</p>
+                            <p className="text-gray-700 text-xs sm:text-sm bg-gray-50 p-2.5 sm:p-3 rounded-lg border border-gray-100">&quot;{fb.message}&quot;</p>
                             {fb.image_url && (
                                 <img src={fb.image_url} alt="Food" className="mt-2 w-24 h-24 sm:w-32 sm:h-32 object-cover rounded-lg border border-gray-200 cursor-pointer hover:scale-105 transition-transform" onClick={() => window.open(fb.image_url, '_blank')} />
                             )}
@@ -371,9 +369,7 @@ const GeneralFeedback = () => {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => { fetchData(); }, [profile]);
-
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         if (!profile) return;
         setLoading(true);
         try {
@@ -386,7 +382,9 @@ const GeneralFeedback = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [profile]);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -477,7 +475,7 @@ const GeneralFeedback = () => {
                                     </div>
                                     <span className="text-[10px] sm:text-xs text-gray-400">{new Date(item.created_at).toLocaleDateString()}</span>
                                 </div>
-                                <div className="bg-gray-50 p-2.5 sm:p-3 rounded-lg text-gray-700 text-xs sm:text-sm mb-2 sm:mb-3 border border-gray-100">"{item.message}"</div>
+                                <div className="bg-gray-50 p-2.5 sm:p-3 rounded-lg text-gray-700 text-xs sm:text-sm mb-2 sm:mb-3 border border-gray-100">&quot;{item.message}&quot;</div>
                                 {item.response ? (
                                     <div className="flex gap-2 sm:gap-3 items-start bg-green-50/50 p-2.5 sm:p-3 rounded-lg border border-green-100">
                                         <CheckCircle className="text-green-600 shrink-0 mt-0.5" size={14} />

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Check, Calendar, Clock, Utensils, Megaphone, Sun, Moon, Coffee, Cookie } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatSlotLabel, buildSlotOptions } from '../utils/menuSlots';
-import { getCurrentMealInfo, getMealLabel } from '../utils/mealTimeUtils';
+import { getCurrentMealInfo } from '../utils/mealTimeUtils';
 import CustomSelect from '../components/CustomSelect';
 
 const StudentDashboard = () => {
@@ -388,7 +388,7 @@ const TodayMenuHighlight = ({ session }) => {
             <div className="flex items-center gap-2 mb-3">
                 <div className="bg-emerald-100 p-1.5 rounded-lg shrink-0"><Utensils size={16} className="text-emerald-600 sm:w-[18px] sm:h-[18px]" /></div>
                 <div className="min-w-0">
-                    <h3 className="font-bold text-emerald-900 text-sm sm:text-base">Today's Menu — {mealInfo.day}</h3>
+                    <h3 className="font-bold text-emerald-900 text-sm sm:text-base">Today&apos;s Menu — {mealInfo.day}</h3>
                     <p className="text-[10px] sm:text-xs text-emerald-600">Tap a meal to view items</p>
                 </div>
             </div>

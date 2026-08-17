@@ -92,7 +92,7 @@ function App() {
                 <Route path="*" element={
                   <div className="text-center py-20 animate-fade-in">
                       <h2 className="text-3xl font-bold text-gray-800 mb-2">404 - Page Not Found</h2>
-                      <p className="text-gray-500 mb-6">The page you are looking for doesn't exist.</p>
+                      <p className="text-gray-500 mb-6">The page you are looking for doesn&apos;t exist.</p>
                       <a href="/" className="bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors">Go Home</a>
                   </div>
                 } />

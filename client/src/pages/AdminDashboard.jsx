@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { Plus, Check, X, Clock, PlayCircle, StopCircle, RefreshCw, AlertCircle, TrendingUp, Calendar, Trash, Trash2, ArrowRight, Settings, MessageSquare, Users, UserCog, UserX, Sparkles, Loader2, XCircle, CheckCircle, Download, FileSpreadsheet, Eye, Filter, Search, Image as ImageIcon, MessageCircle, Send } from 'lucide-react';
+import { Plus, Check, X, Clock, PlayCircle, StopCircle, TrendingUp, Trash, Trash2, Settings, MessageSquare, Users, UserCog, UserX, Sparkles, Loader2, XCircle, CheckCircle, Download, FileSpreadsheet, Eye, Filter, Search, MessageCircle, Send } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import CustomSelect from '../components/CustomSelect';
@@ -124,7 +124,7 @@ const AdminDashboard = () => {
             setBreakfastLimit(3); setLunchLimit(6); setSnacksLimit(2); setDinnerLimit(6);
             fetchSessions();
             toast.success('Voting session created successfully in Draft mode!');
-        } catch (error) { toast.error('Error creating session'); }
+        } catch { toast.error('Error creating session'); }
     };
 
     const updateStatus = async (id, status) => { await supabase.from('voting_sessions').update({ status }).eq('id', id); fetchSessions(); fetchStats(); };
@@ -427,8 +427,8 @@ const PendingApprovals = ({ onApproved }) => {
 
     useEffect(() => { fetchPending(); }, []);
 
-    const handleApprove = async (id) => { setActing(id + '-approve'); try { const { error } = await supabase.from('menu_items').update({ approval_status: 'approved' }).eq('id', id); if (error) throw error; fetchPending(); onApproved(); } catch (err) { toast.error('Failed to approve item'); } finally { setActing(null); } };
-    const handleReject = async (id) => { setActing(id + '-reject'); try { const { error } = await supabase.from('menu_items').update({ approval_status: 'rejected' }).eq('id', id); if (error) throw error; fetchPending(); onApproved(); } catch (err) { toast.error('Failed to reject item'); } finally { setActing(null); } };
+    const handleApprove = async (id) => { setActing(id + '-approve'); try { const { error } = await supabase.from('menu_items').update({ approval_status: 'approved' }).eq('id', id); if (error) throw error; fetchPending(); onApproved(); } catch { toast.error('Failed to approve item'); } finally { setActing(null); } };
+    const handleReject = async (id) => { setActing(id + '-reject'); try { const { error } = await supabase.from('menu_items').update({ approval_status: 'rejected' }).eq('id', id); if (error) throw error; fetchPending(); onApproved(); } catch { toast.error('Failed to reject item'); } finally { setActing(null); } };
 
     const messColors = { veg: 'bg-green-100 text-green-700', non_veg: 'bg-orange-100 text-orange-700', special: 'bg-purple-100 text-purple-700', food_park: 'bg-teal-100 text-teal-700' };
 
@@ -475,13 +475,12 @@ const FinalizeMenuModal = ({ session, onClose }) => {
     const [saving, setSaving] = useState(false);
     const allSelected = items.length > 0 && items.every((item) => item.is_selected);
 
-    const defaultLimits = { breakfast: 3, lunch: 6, snacks: 2, dinner: 6 };
-    const getMealLimit = (mealType) => {
+    const getMealLimit = useCallback((mealType) => {
         const key = `${mealType}_limit`;
-        return Number(session?.[key]) > 0 ? Number(session[key]) : (defaultLimits[mealType] || 4);
-    };
+        return Number(session?.[key]) > 0 ? Number(session[key]) : (DEFAULT_MEAL_LIMITS[mealType] || 4);
+    }, [session]);
 
-    const applyTopVotedSelections = (itemsList) => {
+    const applyTopVotedSelections = useCallback((itemsList) => {
         const groups = {};
         itemsList.forEach((i) => {
             const key = `${i.date_served}-${i.meal_type}-${i.mess_type}`;
@@ -498,7 +497,7 @@ const FinalizeMenuModal = ({ session, onClose }) => {
         });
 
         return itemsList.map(i => ({ ...i, is_selected: selectedIds.has(i.id) }));
-    };
+    }, [getMealLimit]);
 
     useEffect(() => {
         const fetchItems = async () => {
@@ -514,7 +513,7 @@ const FinalizeMenuModal = ({ session, onClose }) => {
             setLoading(false);
         };
         fetchItems();
-    }, [session.id]);
+    }, [session.id, applyTopVotedSelections]);
 
     const toggleSelection = (itemId) => setItems(prev => prev.map(i => i.id === itemId ? { ...i, is_selected: !i.is_selected } : i));
     const setAllSelections = (selected) => setItems(prev => prev.map(i => ({ ...i, is_selected: selected })));
@@ -989,7 +988,7 @@ const AdminLiveFeedbackPanel = () => {
             if (error) throw error;
             toast.success('Feedback deleted');
             setFeedbacks(prev => prev.filter(f => f.id !== feedbackId));
-        } catch (err) {
+        } catch {
             toast.error('Failed to delete feedback');
         }
     };
@@ -1010,8 +1009,6 @@ const AdminLiveFeedbackPanel = () => {
     const pendingCount = feedbacks.filter(f => !f.response && !f.reviewed_by_ai).length;
     const aiReviewedCount = feedbacks.filter(f => !f.response && f.reviewed_by_ai).length;
     const respondedCount = feedbacks.filter(f => f.response).length;
-    const withPhotoCount = feedbacks.filter(f => f.image_url).length;
-
     return (
         <div className="space-y-6 animate-fade-in">
             {/* Header & Action Controls */}
@@ -1436,6 +1433,7 @@ const Toggle = ({ enabled, onToggle }) => (
 
 const AdminMenuEditor = ({ session, onClose }) => {
     const slotOptions = buildSlotOptions(session.session_weeks);
+    const firstSlotValue = slotOptions[0]?.value;
     const totalSlots = getTotalSlots(session.session_weeks);
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -1457,17 +1455,17 @@ const AdminMenuEditor = ({ session, onClose }) => {
     const [distributionMode, setDistributionMode] = useState('min-config');
     const [minMealCounts, setMinMealCounts] = useState(() => getBulkMealCounts(session));
 
-    const fetchItems = async () => {
+    const fetchItems = useCallback(async () => {
         const { data } = await supabase.from('menu_items')
             .select('*')
             .eq('session_id', session.id)
             .order('date_served', { ascending: true })
             .order('meal_type', { ascending: true });
         setItems(data || []);
-    };
+    }, [session.id]);
 
-    useEffect(() => { fetchItems(); }, [session.id]);
-    useEffect(() => { if (slotOptions.length > 0) setDate(slotOptions[0].value); }, [session.id]);
+    useEffect(() => { fetchItems(); }, [fetchItems]);
+    useEffect(() => { if (firstSlotValue) setDate(firstSlotValue); }, [session.id, firstSlotValue]);
     useEffect(() => { setMinMealCounts(getBulkMealCounts(session)); }, [session]);
 
     const handleSubmit = async (e) => {
@@ -1493,7 +1491,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
 
             setName(''); setDescription(''); fetchItems();
             toast.success('Item added successfully');
-        } catch (error) { toast.error('Failed to add item'); } finally { setLoading(false); }
+        } catch { toast.error('Failed to add item'); } finally { setLoading(false); }
     };
 
     const handleFileUpload = (e) => {
@@ -1687,7 +1685,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
                     setCsvParsing(false);
                 }
             },
-            error: (err) => {
+            error: () => {
                 toast.error('Error parsing CSV');
                 setCsvParsing(false);
             }
@@ -1777,7 +1775,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
                 await fetchItems();
                 toast.success('All items deleted successfully.', { id: 'del-all' });
             }
-        } catch (error) {
+        } catch {
             if (confirmModal.type === 'delete-all') {
                 toast.error('Failed to delete all items.', { id: 'del-all' });
             } else if (confirmModal.type === 'remove-csv') {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -320,7 +320,7 @@ const Login = () => {
                         </div>
                         <h2 className="text-2xl font-bold text-gray-900 mb-3">Check Your Email</h2>
                         <p className="text-gray-600 mb-2">
-                            We've sent a confirmation link to:
+                            We&apos;ve sent a confirmation link to:
                         </p>
                         <p className="font-semibold text-primary mb-4">{email}</p>
                         <p className="text-sm text-gray-500 mb-6">
