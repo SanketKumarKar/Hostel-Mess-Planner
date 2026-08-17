@@ -17,39 +17,54 @@ jobs:
   deploy-client:
     name: Deploy frontend to Vercel
     runs-on: ubuntu-latest
-    if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID_CLIENT != '' }}
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' && 'production' || 'preview') }}
+
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || ((github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && 'production' || 'preview') }}
+
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID_CLIENT: ${{ secrets.VERCEL_PROJECT_ID_CLIENT }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Deploy client app
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID_CLIENT != '' }}
         uses: amondnet/vercel-action@v25
         with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID_CLIENT }}
-          scope: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-token: ${{ env.VERCEL_TOKEN }}
+          vercel-org-id: ${{ env.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ env.VERCEL_PROJECT_ID_CLIENT }}
+          scope: ${{ env.VERCEL_ORG_ID }}
           working-directory: ./client
           github-token: ${{ secrets.GITHUB_TOKEN }}
           vercel-args: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' && '--prod' || '' }}
 
+
   deploy-server:
     name: Deploy backend to Vercel
     runs-on: ubuntu-latest
-    if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID_SERVER != '' }}
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' && 'production' || 'preview') }}
+
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || ((github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && 'production' || 'preview') }}
+
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID_SERVER: ${{ secrets.VERCEL_PROJECT_ID_SERVER }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Deploy server app
+        if: ${{ env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID_SERVER != '' }}
         uses: amondnet/vercel-action@v25
         with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID_SERVER }}
-          scope: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-token: ${{ env.VERCEL_TOKEN }}
+          vercel-org-id: ${{ env.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ env.VERCEL_PROJECT_ID_SERVER }}
+          scope: ${{ env.VERCEL_ORG_ID }}
           working-directory: ./server
           github-token: ${{ secrets.GITHUB_TOKEN }}
           vercel-args: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' && '--prod' || '' }}
