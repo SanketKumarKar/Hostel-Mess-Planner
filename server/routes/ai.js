@@ -262,6 +262,7 @@ Keep it concise, direct, and actionable. Focus on specific food items mentioned 
             };
 
             const mealOrder = ['breakfast', 'lunch', 'snacks', 'dinner'];
+            const MAX_BULK_ITEM_REPEATS = 3;
             const buckets = {
                 breakfast: [],
                 lunch: [],
@@ -281,6 +282,30 @@ Keep it concise, direct, and actionable. Focus on specific food items mentioned 
             });
 
             const assignments = new Array(items.length);
+            const scheduledItems = [];
+
+            const cloneForSchedule = (item, day) => {
+                const publicItem = { ...item };
+                delete publicItem.__idx;
+                delete publicItem.__repeat;
+                return {
+                    ...publicItem,
+                    day_index: day,
+                };
+            };
+
+            const buildRepeatedQueue = (mealItems, totalNeeded) => {
+                if (!mealItems || mealItems.length === 0 || totalNeeded <= 0) return [];
+
+                const queue = [];
+                for (let repeat = 1; repeat <= MAX_BULK_ITEM_REPEATS && queue.length < totalNeeded; repeat += 1) {
+                    for (const item of mealItems) {
+                        if (queue.length >= totalNeeded) break;
+                        queue.push({ ...item, __repeat: repeat });
+                    }
+                }
+                return queue;
+            };
 
             const northKeywords = [
                 'roti', 'chapati', 'paratha', 'naan', 'rajma', 'chole', 'dal makhani', 'paneer',
@@ -313,12 +338,18 @@ Keep it concise, direct, and actionable. Focus on specific food items mentioned 
                     neutral: [],
                 };
 
-                mealItems.forEach((item) => {
+                const totalMealItems = mode === 'min-config'
+                    ? (perDayCounts[meal] || 0) * totalDays
+                    : mealItems.length;
+                const sourceItems = mode === 'min-config'
+                    ? buildRepeatedQueue(mealItems, totalMealItems)
+                    : mealItems;
+
+                sourceItems.forEach((item) => {
                     const cuisine = detectCuisine(item);
                     pool[cuisine].push(item);
                 });
 
-                const totalMealItems = mealItems.length;
                 const dayCaps = Array.from({ length: totalDays }, (_, day) => {
                     if (mode === 'min-config') return perDayCounts[meal] || 0;
                     const base = Math.floor(totalMealItems / totalDays);
@@ -342,7 +373,11 @@ Keep it concise, direct, and actionable. Focus on specific food items mentioned 
 
                 const place = (day, item, cuisineHint) => {
                     if (!item) return;
-                    assignments[item.__idx] = day;
+                    if (mode === 'min-config') {
+                        scheduledItems.push(cloneForSchedule(item, day));
+                    } else {
+                        assignments[item.__idx] = day;
+                    }
                     dayStats[day].total += 1;
 
                     const resolvedCuisine = cuisineHint || detectCuisine(item);
@@ -409,13 +444,6 @@ Keep it concise, direct, and actionable. Focus on specific food items mentioned 
                 buckets[meal] = [];
             };
 
-            const hasPendingMealItems = () => (
-                buckets.breakfast.length > 0 ||
-                buckets.lunch.length > 0 ||
-                buckets.snacks.length > 0 ||
-                buckets.dinner.length > 0
-            );
-
             if (mode === 'equal') {
                 for (const meal of mealOrder) {
                     if (meal === 'lunch' || meal === 'dinner') {
@@ -434,31 +462,36 @@ Keep it concise, direct, and actionable. Focus on specific food items mentioned 
                 distributeLunchDinnerBalanced('lunch');
                 distributeLunchDinnerBalanced('dinner');
 
-                // Fill one full day at a time in meal order, then move to the next day.
-                while (hasPendingMealItems()) {
-                    for (let day = 0; day < totalDays; day += 1) {
-                        for (const meal of mealOrder) {
-                            const take = perDayCounts[meal] || 0;
-                            for (let i = 0; i < take && buckets[meal].length > 0; i += 1) {
-                                const nextItem = buckets[meal].shift();
-                                assignments[nextItem.__idx] = day;
-                            }
-                        }
+                const remainingMeals = ['breakfast', 'snacks'];
+                for (const meal of remainingMeals) {
+                    const take = perDayCounts[meal] || 0;
+                    const queue = buildRepeatedQueue(buckets[meal], take * totalDays);
+                    let pointer = 0;
 
-                        if (!hasPendingMealItems()) break;
+                    for (let day = 0; day < totalDays; day += 1) {
+                        for (let i = 0; i < take && pointer < queue.length; i += 1) {
+                            scheduledItems.push(cloneForSchedule(queue[pointer], day));
+                            pointer += 1;
+                        }
                     }
                 }
             }
 
             // If any unknown meal types exist, place them in day order at the end.
             buckets.other.forEach((item, idx) => {
-                assignments[item.__idx] = idx % totalDays;
+                if (mode === 'min-config') {
+                    scheduledItems.push(cloneForSchedule(item, idx % totalDays));
+                } else {
+                    assignments[item.__idx] = idx % totalDays;
+                }
             });
 
-            const mappedItems = items.map((item, idx) => ({
-                ...item,
-                day_index: Number.isInteger(assignments[idx]) ? assignments[idx] : (idx % totalDays),
-            }));
+            const mappedItems = mode === 'min-config'
+                ? scheduledItems
+                : items.map((item, idx) => ({
+                    ...item,
+                    day_index: Number.isInteger(assignments[idx]) ? assignments[idx] : (idx % totalDays),
+                }));
 
             res.json({ distributed: mappedItems });
         } catch (error) {

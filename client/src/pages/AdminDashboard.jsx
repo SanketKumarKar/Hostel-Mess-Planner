@@ -9,6 +9,21 @@ import * as XLSX from 'xlsx';
 import { buildSlotOptions, formatSlotLabel, getTotalSlots } from '../utils/menuSlots';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const DEFAULT_MEAL_LIMITS = { breakfast: 3, lunch: 6, snacks: 2, dinner: 6 };
+const BULK_ALLOCATION_BUFFER = { breakfast: 3, lunch: 4, snacks: 3, dinner: 4 };
+const MAX_BULK_ITEM_REPEATS = 3;
+
+const getSessionMealLimit = (session, mealType) => {
+    const key = `${mealType}_limit`;
+    return Number(session?.[key]) > 0 ? Number(session[key]) : DEFAULT_MEAL_LIMITS[mealType];
+};
+
+const getBulkMealCounts = (session) => ({
+    breakfast: getSessionMealLimit(session, 'breakfast') + BULK_ALLOCATION_BUFFER.breakfast,
+    lunch: getSessionMealLimit(session, 'lunch') + BULK_ALLOCATION_BUFFER.lunch,
+    snacks: getSessionMealLimit(session, 'snacks') + BULK_ALLOCATION_BUFFER.snacks,
+    dinner: getSessionMealLimit(session, 'dinner') + BULK_ALLOCATION_BUFFER.dinner,
+});
 
 const formatCompactVotes = (value) => {
     const count = Number(value) || 0;
@@ -1440,7 +1455,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
     const [confirmModal, setConfirmModal] = useState({ open: false, type: null, payload: null });
     const [confirmLoading, setConfirmLoading] = useState(false);
     const [distributionMode, setDistributionMode] = useState('min-config');
-    const [minMealCounts, setMinMealCounts] = useState({ breakfast: 3, lunch: 6, snacks: 2, dinner: 6 });
+    const [minMealCounts, setMinMealCounts] = useState(() => getBulkMealCounts(session));
 
     const fetchItems = async () => {
         const { data } = await supabase.from('menu_items')
@@ -1453,6 +1468,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
 
     useEffect(() => { fetchItems(); }, [session.id]);
     useEffect(() => { if (slotOptions.length > 0) setDate(slotOptions[0].value); }, [session.id]);
+    useEffect(() => { setMinMealCounts(getBulkMealCounts(session)); }, [session]);
 
     const handleSubmit = async (e) => {
         e.preventDefault(); 
@@ -1511,6 +1527,30 @@ const AdminMenuEditor = ({ session, onClose }) => {
         });
 
         const assignments = new Array(items.length);
+        const scheduledItems = [];
+
+        const cloneForSchedule = (item, day) => {
+            const publicItem = { ...item };
+            delete publicItem.__idx;
+            delete publicItem.__repeat;
+            return {
+                ...publicItem,
+                day_index: day,
+            };
+        };
+
+        const buildRepeatedQueue = (mealItems, totalNeeded) => {
+            if (!mealItems || mealItems.length === 0 || totalNeeded <= 0) return [];
+
+            const queue = [];
+            for (let repeat = 1; repeat <= MAX_BULK_ITEM_REPEATS && queue.length < totalNeeded; repeat += 1) {
+                for (const item of mealItems) {
+                    if (queue.length >= totalNeeded) break;
+                    queue.push({ ...item, __repeat: repeat });
+                }
+            }
+            return queue;
+        };
 
         if (mode === 'equal') {
             mealOrder.forEach(meal => {
@@ -1522,35 +1562,34 @@ const AdminMenuEditor = ({ session, onClose }) => {
                 }
             });
         } else {
-            const hasPendingMealItems = () => (
-                buckets.breakfast.length > 0 ||
-                buckets.lunch.length > 0 ||
-                buckets.snacks.length > 0 ||
-                buckets.dinner.length > 0
-            );
+            for (const meal of mealOrder) {
+                const take = perDayCounts[meal] || 0;
+                const queue = buildRepeatedQueue(buckets[meal], take * totalDays);
+                let pointer = 0;
 
-            while (hasPendingMealItems()) {
                 for (let day = 0; day < totalDays; day += 1) {
-                    for (const meal of mealOrder) {
-                        const take = perDayCounts[meal] || 0;
-                        for (let i = 0; i < take && buckets[meal].length > 0; i += 1) {
-                            const nextItem = buckets[meal].shift();
-                            assignments[nextItem.__idx] = day;
-                        }
+                    for (let i = 0; i < take && pointer < queue.length; i += 1) {
+                        scheduledItems.push(cloneForSchedule(queue[pointer], day));
+                        pointer += 1;
                     }
-                    if (!hasPendingMealItems()) break;
                 }
             }
         }
 
         buckets.other.forEach((item, idx) => {
-            assignments[item.__idx] = idx % totalDays;
+            if (mode === 'min-config') {
+                scheduledItems.push(cloneForSchedule(item, idx % totalDays));
+            } else {
+                assignments[item.__idx] = idx % totalDays;
+            }
         });
 
-        return items.map((item, idx) => ({
-            ...item,
-            day_index: Number.isInteger(assignments[idx]) ? assignments[idx] : (idx % totalDays),
-        }));
+        return mode === 'min-config'
+            ? scheduledItems
+            : items.map((item, idx) => ({
+                ...item,
+                day_index: Number.isInteger(assignments[idx]) ? assignments[idx] : (idx % totalDays),
+            }));
     };
 
     const formatDateKey = (date) => {
@@ -1564,12 +1603,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
         if (!csvFile) return toast.error('Please select a CSV file');
         setCsvParsing(true);
 
-        const mealCounts = {
-            breakfast: Number(minMealCounts.breakfast) > 0 ? Number(minMealCounts.breakfast) : 3,
-            lunch: Number(minMealCounts.lunch) > 0 ? Number(minMealCounts.lunch) : 6,
-            snacks: Number(minMealCounts.snacks) > 0 ? Number(minMealCounts.snacks) : 2,
-            dinner: Number(minMealCounts.dinner) > 0 ? Number(minMealCounts.dinner) : 6,
-        };
+        const mealCounts = getBulkMealCounts(session);
 
         const splitCellItems = (value) => String(value || '')
             .split(',')
@@ -1783,7 +1817,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
                                     </button>
                                 )}
                             </div>
-                            <p className="text-xs leading-5 text-indigo-700/90 block mb-4">Upload a CSV (Breakfast, Lunch, Snacks, Dinner headers). Choose equal distribution or minimum-per-day configuration.</p>
+                            <p className="text-xs leading-5 text-indigo-700/90 block mb-4">Upload a CSV (Breakfast, Lunch, Snacks, Dinner headers). Minimum mode uses the session meal limits plus a bulk buffer.</p>
                             
                             <div className="space-y-3.5">
                                 <div>
@@ -1813,50 +1847,50 @@ const AdminMenuEditor = ({ session, onClose }) => {
                                 {distributionMode === 'min-config' && (
                                     <div className="grid grid-cols-2 gap-2.5">
                                         <div>
-                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Breakfast (min)</label>
+                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Breakfast (limit + 3)</label>
                                             <input
                                                 type="number"
                                                 min="1"
                                                 value={minMealCounts.breakfast}
-                                                onChange={(e) => setMinMealCounts(prev => ({ ...prev, breakfast: e.target.value }))}
-                                                className="w-full bg-white px-2.5 py-2 border border-indigo-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-indigo-200"
+                                                readOnly
+                                                className="w-full bg-indigo-50 px-2.5 py-2 border border-indigo-200 rounded-xl outline-none text-sm font-semibold text-indigo-950"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Lunch (min)</label>
+                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Lunch (limit + 4)</label>
                                             <input
                                                 type="number"
                                                 min="1"
                                                 value={minMealCounts.lunch}
-                                                onChange={(e) => setMinMealCounts(prev => ({ ...prev, lunch: e.target.value }))}
-                                                className="w-full bg-white px-2.5 py-2 border border-indigo-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-indigo-200"
+                                                readOnly
+                                                className="w-full bg-indigo-50 px-2.5 py-2 border border-indigo-200 rounded-xl outline-none text-sm font-semibold text-indigo-950"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Snacks (min)</label>
+                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Snacks (limit + 3)</label>
                                             <input
                                                 type="number"
                                                 min="1"
                                                 value={minMealCounts.snacks}
-                                                onChange={(e) => setMinMealCounts(prev => ({ ...prev, snacks: e.target.value }))}
-                                                className="w-full bg-white px-2.5 py-2 border border-indigo-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-indigo-200"
+                                                readOnly
+                                                className="w-full bg-indigo-50 px-2.5 py-2 border border-indigo-200 rounded-xl outline-none text-sm font-semibold text-indigo-950"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Dinner (min)</label>
+                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Dinner (limit + 4)</label>
                                             <input
                                                 type="number"
                                                 min="1"
                                                 value={minMealCounts.dinner}
-                                                onChange={(e) => setMinMealCounts(prev => ({ ...prev, dinner: e.target.value }))}
-                                                className="w-full bg-white px-2.5 py-2 border border-indigo-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-indigo-200"
+                                                readOnly
+                                                className="w-full bg-indigo-50 px-2.5 py-2 border border-indigo-200 rounded-xl outline-none text-sm font-semibold text-indigo-950"
                                             />
                                         </div>
                                     </div>
                                 )}
                                 {distributionMode === 'min-config' && (
                                     <p className="text-[11px] text-indigo-800 bg-indigo-100/70 border border-indigo-200 rounded-lg px-2.5 py-2">
-                                        Current minimum configuration: Lunch {minMealCounts.lunch || 6}, Breakfast {minMealCounts.breakfast || 3}, Snacks {minMealCounts.snacks || 2}, Dinner {minMealCounts.dinner || 6}.
+                                        Bulk upload targets: Lunch {minMealCounts.lunch}, Breakfast {minMealCounts.breakfast}, Snacks {minMealCounts.snacks}, Dinner {minMealCounts.dinner}. Items may repeat up to {MAX_BULK_ITEM_REPEATS} times to fill daily targets.
                                     </p>
                                 )}
                                 <input type="file" id="csv-upload" accept=".csv" onChange={handleFileUpload} className="block w-full text-xs text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700" />
