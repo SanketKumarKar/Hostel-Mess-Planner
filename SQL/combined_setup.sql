@@ -50,10 +50,10 @@ CREATE TABLE IF NOT EXISTS public.voting_sessions (
   end_date date NOT NULL,
   title text,
   session_weeks integer NOT NULL DEFAULT 2,
-  breakfast_limit integer NOT NULL DEFAULT 3,
-  lunch_limit integer NOT NULL DEFAULT 6,
+  breakfast_limit integer NOT NULL DEFAULT 4,
+  lunch_limit integer NOT NULL DEFAULT 8,
   snacks_limit integer NOT NULL DEFAULT 2,
-  dinner_limit integer NOT NULL DEFAULT 6,
+  dinner_limit integer NOT NULL DEFAULT 8,
   status session_status DEFAULT 'draft',
   created_by uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
@@ -68,13 +68,13 @@ CREATE TABLE IF NOT EXISTS public.voting_sessions (
 ALTER TABLE public.voting_sessions
   ADD COLUMN IF NOT EXISTS session_weeks integer NOT NULL DEFAULT 2;
 ALTER TABLE public.voting_sessions
-  ADD COLUMN IF NOT EXISTS breakfast_limit integer NOT NULL DEFAULT 3;
+  ADD COLUMN IF NOT EXISTS breakfast_limit integer NOT NULL DEFAULT 4;
 ALTER TABLE public.voting_sessions
-  ADD COLUMN IF NOT EXISTS lunch_limit integer NOT NULL DEFAULT 6;
+  ADD COLUMN IF NOT EXISTS lunch_limit integer NOT NULL DEFAULT 8;
 ALTER TABLE public.voting_sessions
   ADD COLUMN IF NOT EXISTS snacks_limit integer NOT NULL DEFAULT 2;
 ALTER TABLE public.voting_sessions
-  ADD COLUMN IF NOT EXISTS dinner_limit integer NOT NULL DEFAULT 6;
+  ADD COLUMN IF NOT EXISTS dinner_limit integer NOT NULL DEFAULT 8;
 
 DO $$
 BEGIN

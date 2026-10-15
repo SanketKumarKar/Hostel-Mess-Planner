@@ -244,7 +244,7 @@ const VotingInterface = ({ session, onEditProfile }) => {
 
     useEffect(() => { if (profile?.mess_type) fetchItemsAndVotes(); }, [profile?.mess_type, fetchItemsAndVotes]);
 
-    const defaultLimits = { breakfast: 3, lunch: 6, snacks: 2, dinner: 6 };
+    const defaultLimits = { breakfast: 4, lunch: 8, snacks: 2, dinner: 8 };
     const getMealLimit = (mealType) => {
         const key = `${mealType}_limit`;
         return Number(session?.[key]) > 0 ? Number(session[key]) : (defaultLimits[mealType] || 4);

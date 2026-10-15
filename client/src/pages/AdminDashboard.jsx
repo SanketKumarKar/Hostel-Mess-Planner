@@ -9,8 +9,8 @@ import * as XLSX from 'xlsx';
 import { buildSlotOptions, formatSlotLabel, getTotalSlots } from '../utils/menuSlots';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-const DEFAULT_MEAL_LIMITS = { breakfast: 3, lunch: 6, snacks: 2, dinner: 6 };
-const BULK_ALLOCATION_BUFFER = { breakfast: 3, lunch: 4, snacks: 3, dinner: 4 };
+const DEFAULT_MEAL_LIMITS = { breakfast: 4, lunch: 8, snacks: 2, dinner: 8 };
+const BULK_ALLOCATION_BUFFER = { breakfast: 2, lunch: 3, snacks: 1, dinner: 3 };
 const MAX_BULK_ITEM_REPEATS = 3;
 
 const getSessionMealLimit = (session, mealType) => {
@@ -50,10 +50,10 @@ const AdminDashboard = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [sessionWeeks, setSessionWeeks] = useState(2);
-    const [breakfastLimit, setBreakfastLimit] = useState(3);
-    const [lunchLimit, setLunchLimit] = useState(6);
+    const [breakfastLimit, setBreakfastLimit] = useState(4);
+    const [lunchLimit, setLunchLimit] = useState(8);
     const [snacksLimit, setSnacksLimit] = useState(2);
-    const [dinnerLimit, setDinnerLimit] = useState(6);
+    const [dinnerLimit, setDinnerLimit] = useState(8);
 
     useEffect(() => { fetchSessions(); fetchStats(); }, []);
 
@@ -103,10 +103,10 @@ const AdminDashboard = () => {
         }
 
         try {
-            const bLim = Number(breakfastLimit) > 0 ? Number(breakfastLimit) : 3;
-            const lLim = Number(lunchLimit) > 0 ? Number(lunchLimit) : 6;
+            const bLim = Number(breakfastLimit) > 0 ? Number(breakfastLimit) : 4;
+            const lLim = Number(lunchLimit) > 0 ? Number(lunchLimit) : 8;
             const sLim = Number(snacksLimit) > 0 ? Number(snacksLimit) : 2;
-            const dLim = Number(dinnerLimit) > 0 ? Number(dinnerLimit) : 6;
+            const dLim = Number(dinnerLimit) > 0 ? Number(dinnerLimit) : 8;
 
             const { error } = await supabase.from('voting_sessions').insert({
                 title: title.trim(),
@@ -121,7 +121,7 @@ const AdminDashboard = () => {
             });
             if (error) throw error;
             setShowCreate(false); setTitle(''); setStartDate(''); setEndDate(''); setSessionWeeks(2);
-            setBreakfastLimit(3); setLunchLimit(6); setSnacksLimit(2); setDinnerLimit(6);
+            setBreakfastLimit(4); setLunchLimit(8); setSnacksLimit(2); setDinnerLimit(8);
             fetchSessions();
             toast.success('Voting session created successfully in Draft mode!');
         } catch { toast.error('Error creating session'); }
@@ -323,10 +323,10 @@ const AdminDashboard = () => {
                                             <td className="px-6 py-4 text-gray-500 text-sm">{new Date(session.start_date).toLocaleDateString()} - {new Date(session.end_date).toLocaleDateString()}</td>
                                             <td className="px-6 py-4">
                                                 <div className="text-xs text-gray-600 flex gap-1.5 flex-wrap">
-                                                    <span className="bg-gray-100 px-2 py-0.5 rounded font-mono" title="Breakfast Limit">B: {session.breakfast_limit || 3}</span>
-                                                    <span className="bg-gray-100 px-2 py-0.5 rounded font-mono" title="Lunch Limit">L: {session.lunch_limit || 6}</span>
+                                                    <span className="bg-gray-100 px-2 py-0.5 rounded font-mono" title="Breakfast Limit">B: {session.breakfast_limit || 4}</span>
+                                                    <span className="bg-gray-100 px-2 py-0.5 rounded font-mono" title="Lunch Limit">L: {session.lunch_limit || 8}</span>
                                                     <span className="bg-gray-100 px-2 py-0.5 rounded font-mono" title="Snacks Limit">S: {session.snacks_limit || 2}</span>
-                                                    <span className="bg-gray-100 px-2 py-0.5 rounded font-mono" title="Dinner Limit">D: {session.dinner_limit || 6}</span>
+                                                    <span className="bg-gray-100 px-2 py-0.5 rounded font-mono" title="Dinner Limit">D: {session.dinner_limit || 8}</span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4"><VoteCount sessionId={session.id} /></td>
@@ -554,7 +554,7 @@ const FinalizeMenuModal = ({ session, onClose }) => {
                 <div className="p-6 border-b flex justify-between items-start bg-gray-50 rounded-t-xl flex-wrap gap-3">
                     <div>
                         <h3 className="text-xl font-bold text-gray-800">Finalize Menu</h3>
-                        <p className="text-sm text-gray-500">{session.title} • Top-voted items preselected (Limits: B:{session.breakfast_limit || 3}, L:{session.lunch_limit || 6}, S:{session.snacks_limit || 2}, D:{session.dinner_limit || 6})</p>
+                        <p className="text-sm text-gray-500">{session.title} • Top-voted items preselected (Limits: B:{session.breakfast_limit || 4}, L:{session.lunch_limit || 8}, S:{session.snacks_limit || 2}, D:{session.dinner_limit || 8})</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
@@ -1499,14 +1499,130 @@ const AdminMenuEditor = ({ session, onClose }) => {
         if (file) setCsvFile(file);
     };
 
-    const distributeLocally = (items, days, mode, mealCounts) => {
+    const getRepeatingValue = (row, mealType) => {
+        const keys = Object.keys(row || {});
+        const m = mealType.toLowerCase();
+        const match = keys.find(k => {
+            const cleaned = k.toLowerCase().replace(/[^a-z]/g, '');
+            return cleaned.includes('repeat') && cleaned.includes(m);
+        });
+        return match ? row[match] : null;
+    };
+
+    const getRegularValue = (row, mealType) => {
+        const keys = Object.keys(row || {});
+        const m = mealType.toLowerCase();
+        const match = keys.find(k => {
+            const cleaned = k.toLowerCase().replace(/[^a-z]/g, '');
+            return cleaned === m || (cleaned.includes(m) && !cleaned.includes('repeat') && !cleaned.includes('daily'));
+        });
+        return match ? row[match] : null;
+    };
+
+    const distributeLocally = (items, days, mode, mealCounts, repeatingItems, startDate) => {
         const totalDays = Number(days) > 0 ? Number(days) : 14;
         const mealOrder = ['breakfast', 'lunch', 'snacks', 'dinner'];
         const perDayCounts = {
-            breakfast: Number(mealCounts?.breakfast) > 0 ? Number(mealCounts.breakfast) : 3,
-            lunch: Number(mealCounts?.lunch) > 0 ? Number(mealCounts.lunch) : 6,
-            snacks: Number(mealCounts?.snacks) > 0 ? Number(mealCounts.snacks) : 2,
-            dinner: Number(mealCounts?.dinner) > 0 ? Number(mealCounts.dinner) : 6,
+            breakfast: Number(mealCounts?.breakfast) > 0 ? Number(mealCounts.breakfast) : 6,
+            lunch: Number(mealCounts?.lunch) > 0 ? Number(mealCounts.lunch) : 11,
+            snacks: Number(mealCounts?.snacks) > 0 ? Number(mealCounts.snacks) : 3,
+            dinner: Number(mealCounts?.dinner) > 0 ? Number(mealCounts.dinner) : 11,
+        };
+
+        const scheduledItems = [];
+        const repeatingBuckets = {
+            breakfast: [],
+            lunch: [],
+            snacks: [],
+            dinner: [],
+        };
+
+        if (repeatingItems && typeof repeatingItems === 'object') {
+            mealOrder.forEach(m => {
+                const list = repeatingItems[m] || repeatingItems[m.toUpperCase()] || [];
+                if (Array.isArray(list)) {
+                    list.forEach(name => {
+                        const nameStr = typeof name === 'string' ? name : name?.name;
+                        if (nameStr && !repeatingBuckets[m].includes(nameStr.trim())) {
+                            repeatingBuckets[m].push(nameStr.trim());
+                        }
+                    });
+                }
+            });
+        }
+
+        // Add repeating items to EVERY day
+        for (let day = 0; day < totalDays; day += 1) {
+            mealOrder.forEach(meal => {
+                repeatingBuckets[meal].forEach(repName => {
+                    scheduledItems.push({
+                        name: repName,
+                        meal_type: meal,
+                        description: 'Daily Repeating Item',
+                        day_index: day,
+                        is_repeating: true,
+                    });
+                });
+            });
+        }
+
+        const parsedStartDate = startDate ? new Date(startDate) : new Date();
+        const startDayOfWeek = isNaN(parsedStartDate.getTime()) ? 1 : parsedStartDate.getDay();
+        const isWeekendDay = (day) => {
+            const dow = (startDayOfWeek + day) % 7;
+            return dow === 0 || dow === 6; // Sunday or Saturday
+        };
+
+        const northKeywords = [
+            'roti', 'chapati', 'paratha', 'naan', 'rajma', 'chole', 'dal makhani', 'paneer',
+            'kadhi', 'aloo', 'jeera rice', 'pulao', 'palak', 'mutter', 'kulcha', 'amritsari',
+            'dal tadka', 'kofta', 'bhindi masala', 'baingan', 'kashmiri', 'methi', 'malai'
+        ];
+        const southKeywords = [
+            'idli', 'dosa', 'uttapam', 'upma', 'sambar', 'rasam', 'curd rice', 'lemon rice',
+            'tamarind rice', 'pongal', 'avial', 'poriyal', 'kootu', 'appam', 'puttu', 'bisi bele',
+            'chettinad', 'kara kuzhambu', 'more kuzhambu', 'vatha kuzhambu', 'thorvaiyal',
+            'thovaiyal', 'parupu podi', 'arachivitta', 'uduppi', 'udupi', 'seva', 'masiyal',
+            'varuval', 'bonda'
+        ];
+        const eastKeywords = [
+            'luchi', 'cholar dal', 'aloo posto', 'ghugni', 'dalma', 'mustard', 'rosogolla',
+            'rasgulla', 'sandesh', 'payesh', 'kosha', 'kolkata', 'macher', 'fish curry',
+            'dim kosha', 'chhena', 'posto'
+        ];
+        const westKeywords = [
+            'pav bhaji', 'poha', 'misal', 'thepla', 'dhokla', 'sev tameta', 'gujarati',
+            'usal', 'batata', 'vada pav', 'kolhapuri', 'dabeli', 'shrikhand', 'dal baati'
+        ];
+        const weekendKeywords = [
+            'biryani', 'briyani', 'fried rice', 'manchurian', 'pav bhaji', 'samosa', 'chaat',
+            'chat', 'pani puri', 'poori', 'puri', 'burger', 'pasta', 'pizza', 'french fries',
+            'chips', 'schezwan', 'ice cream', 'jalebi', 'jelabi', 'gulab jamun', 'halwa',
+            'ladoo', 'laddu', 'pakoda', 'bajji', 'pastry', 'cake', 'kheer', 'payasam',
+            'custard', 'milkshake', 'noodles', 'maggi', 'puff', 'chilly', 'chilli', 'crispy'
+        ];
+
+        const detectCuisine = (item) => {
+            const text = `${item.name || ''} ${item.description || ''}`.toLowerCase();
+            const isNorth = northKeywords.some((k) => text.includes(k));
+            const isSouth = southKeywords.some((k) => text.includes(k));
+            const isEast = eastKeywords.some((k) => text.includes(k));
+            const isWest = westKeywords.some((k) => text.includes(k));
+
+            const matches = [];
+            if (isNorth) matches.push('north');
+            if (isSouth) matches.push('south');
+            if (isEast) matches.push('east');
+            if (isWest) matches.push('west');
+
+            if (matches.length > 1) return 'pan_indian';
+            if (matches.length === 1) return matches[0];
+            return 'neutral';
+        };
+
+        const isWeekendSpecial = (item) => {
+            const text = `${item.name || ''} ${item.description || ''}`.toLowerCase();
+            return weekendKeywords.some((k) => text.includes(k));
         };
 
         const buckets = {
@@ -1524,9 +1640,6 @@ const AdminMenuEditor = ({ session, onClose }) => {
             else buckets.other.push(entry);
         });
 
-        const assignments = new Array(items.length);
-        const scheduledItems = [];
-
         const cloneForSchedule = (item, day) => {
             const publicItem = { ...item };
             delete publicItem.__idx;
@@ -1534,12 +1647,12 @@ const AdminMenuEditor = ({ session, onClose }) => {
             return {
                 ...publicItem,
                 day_index: day,
+                is_repeating: false,
             };
         };
 
         const buildRepeatedQueue = (mealItems, totalNeeded) => {
             if (!mealItems || mealItems.length === 0 || totalNeeded <= 0) return [];
-
             const queue = [];
             for (let repeat = 1; repeat <= MAX_BULK_ITEM_REPEATS && queue.length < totalNeeded; repeat += 1) {
                 for (const item of mealItems) {
@@ -1550,44 +1663,105 @@ const AdminMenuEditor = ({ session, onClose }) => {
             return queue;
         };
 
-        if (mode === 'equal') {
-            mealOrder.forEach(meal => {
-                let dayPointer = 0;
-                while (buckets[meal].length > 0) {
-                    const nextItem = buckets[meal].shift();
-                    assignments[nextItem.__idx] = dayPointer % totalDays;
-                    dayPointer += 1;
-                }
-            });
-        } else {
-            for (const meal of mealOrder) {
-                const take = perDayCounts[meal] || 0;
-                const queue = buildRepeatedQueue(buckets[meal], take * totalDays);
-                let pointer = 0;
+        mealOrder.forEach((meal) => {
+            const mealItems = buckets[meal];
+            if (!mealItems || mealItems.length === 0) return;
 
-                for (let day = 0; day < totalDays; day += 1) {
-                    for (let i = 0; i < take && pointer < queue.length; i += 1) {
-                        scheduledItems.push(cloneForSchedule(queue[pointer], day));
-                        pointer += 1;
+            const targetPerDay = perDayCounts[meal] || 0;
+            const totalMealItems = mode === 'min-config'
+                ? targetPerDay * totalDays
+                : mealItems.length;
+
+            const sourceItems = mode === 'min-config'
+                ? buildRepeatedQueue(mealItems, totalMealItems)
+                : [...mealItems];
+
+            const weekendPool = [];
+            const weekdayPool = [];
+            sourceItems.forEach((it) => {
+                if (isWeekendSpecial(it)) weekendPool.push(it);
+                else weekdayPool.push(it);
+            });
+
+            const regionPool = { north: [], south: [], east: [], west: [], pan_indian: [], neutral: [] };
+            sourceItems.forEach((it) => {
+                const c = detectCuisine(it);
+                regionPool[c].push(it);
+            });
+
+            const dayCaps = Array.from({ length: totalDays }, (_, day) => {
+                if (mode === 'min-config') return targetPerDay;
+                const base = Math.floor(totalMealItems / totalDays);
+                const remainder = totalMealItems % totalDays;
+                return day < remainder ? base + 1 : base;
+            });
+
+            const dayAllocations = Array.from({ length: totalDays }, () => []);
+
+            // Saturdays and Sundays: special/junk items first
+            for (let day = 0; day < totalDays; day += 1) {
+                if (isWeekendDay(day) && weekendPool.length > 0) {
+                    while (dayAllocations[day].length < dayCaps[day] && weekendPool.length > 0) {
+                        dayAllocations[day].push(cloneForSchedule(weekendPool.shift(), day));
                     }
                 }
             }
-        }
 
-        buckets.other.forEach((item, idx) => {
-            if (mode === 'min-config') {
-                scheduledItems.push(cloneForSchedule(item, idx % totalDays));
-            } else {
-                assignments[item.__idx] = idx % totalDays;
+            // Weekdays: balanced wholesome items first
+            for (let day = 0; day < totalDays; day += 1) {
+                if (!isWeekendDay(day) && weekdayPool.length > 0) {
+                    while (dayAllocations[day].length < Math.min(dayCaps[day], 2) && weekdayPool.length > 0) {
+                        dayAllocations[day].push(cloneForSchedule(weekdayPool.shift(), day));
+                    }
+                }
             }
+
+            // Pan-Indian balance for lunch and dinner
+            if (meal === 'lunch' || meal === 'dinner') {
+                for (let day = 0; day < totalDays; day += 1) {
+                    if (dayAllocations[day].length < dayCaps[day] && regionPool.north.length > 0) {
+                        dayAllocations[day].push(cloneForSchedule(regionPool.north.shift(), day));
+                    }
+                    if (dayAllocations[day].length < dayCaps[day] && regionPool.south.length > 0) {
+                        dayAllocations[day].push(cloneForSchedule(regionPool.south.shift(), day));
+                    }
+                    if (dayAllocations[day].length < dayCaps[day] && regionPool.east.length > 0) {
+                        dayAllocations[day].push(cloneForSchedule(regionPool.east.shift(), day));
+                    }
+                    if (dayAllocations[day].length < dayCaps[day] && regionPool.west.length > 0) {
+                        dayAllocations[day].push(cloneForSchedule(regionPool.west.shift(), day));
+                    }
+                }
+            }
+
+            // Fill remaining slots
+            const remainingPool = [...weekendPool, ...weekdayPool];
+            for (let day = 0; day < totalDays; day += 1) {
+                while (dayAllocations[day].length < dayCaps[day] && remainingPool.length > 0) {
+                    dayAllocations[day].push(cloneForSchedule(remainingPool.shift(), day));
+                }
+            }
+
+            if (mode === 'min-config') {
+                let fillPointer = 0;
+                for (let day = 0; day < totalDays; day += 1) {
+                    while (dayAllocations[day].length < dayCaps[day]) {
+                        dayAllocations[day].push(cloneForSchedule(mealItems[fillPointer % mealItems.length], day));
+                        fillPointer += 1;
+                    }
+                }
+            }
+
+            dayAllocations.forEach((allocs) => {
+                allocs.forEach((it) => scheduledItems.push(it));
+            });
         });
 
-        return mode === 'min-config'
-            ? scheduledItems
-            : items.map((item, idx) => ({
-                ...item,
-                day_index: Number.isInteger(assignments[idx]) ? assignments[idx] : (idx % totalDays),
-            }));
+        buckets.other.forEach((item, idx) => {
+            scheduledItems.push(cloneForSchedule(item, idx % totalDays));
+        });
+
+        return scheduledItems;
     };
 
     const formatDateKey = (date) => {
@@ -1595,6 +1769,93 @@ const AdminMenuEditor = ({ session, onClose }) => {
         const m = String(date.getMonth() + 1).padStart(2, '0');
         const d = String(date.getDate()).padStart(2, '0');
         return `${y}-${m}-${d}`;
+    };
+
+    const handleDownloadTemplate = () => {
+        const sampleRows = [
+            {
+                Breakfast: "Onion Aloo Veg Paratha + Tomato Chutney + Curd, Dosa (Podi Karam) + Sambar + Peanut Chutney, Egg Masala Omelette",
+                Lunch: "Phulka, Rajma Curry, Veg Pulao + Boondi Raita, Chettinad Sambar, Carrot and Beans Poriyal, Banana + Butter Milk",
+                Snacks: "Veg Samosa + Sweet Chutney",
+                Dinner: "Phulka, Seasonal Vegetable Sabji, Jeera Dal, Dry Cabbage Poriyal, Chocolate Ice Cream, Tomato Soup",
+                "Repeating Breakfast": "Toasted Bread + Butter + Jam, Tea / Coffee / Milk",
+                "Repeating Lunch": "White Rice, Paruppu Rasam, Curd, Parupu Podi + Gingelly Oil + Thovaiyal, Pickle + Papad",
+                "Repeating Snacks": "Tea / Coffee / Milk",
+                "Repeating Dinner": "White Rice, Milagu Rasam, Curd, Pickle, Fresh Green Salad, Milk",
+            },
+            {
+                Breakfast: "Paneer Paratha + Tomato Gravy + Curd, Rava Idli + Vada + Sambar + Coconut Chutney, Boiled Egg",
+                Lunch: "Phulka, Paneer Butter Masala, Kashmiri Pulao, Mochai Kara Kuzhambu, Aloo Poriyal, Papaya + Lemon Mint Juice",
+                Snacks: "Sandwich + Sauce",
+                Dinner: "Chapathi, Soya Chunk Gravy, Lemon Rice + Harar Dal, Beans Poriyal, Fruit Custard, Sweet Corn Soup",
+                "Repeating Breakfast": "",
+                "Repeating Lunch": "",
+                "Repeating Snacks": "",
+                "Repeating Dinner": "",
+            },
+            {
+                Breakfast: "Palak Paratha + Curd, Masala Dosa + Sambar + Groundnut Chutney, Egg Podimas",
+                Lunch: "Chapathi, Palak Paneer, Ghee Rice + Panchamel Dal, Arachivitta Sambar, Tendli Poriyal, Watermelon + Mint Buttermilk",
+                Snacks: "Mysore Bonda + Coconut Chutney",
+                Dinner: "Atta Poori, White Chana Masala, More Kulambu, Mixed Vegetable Poriyal, Strawberry Milkshake",
+                "Repeating Breakfast": "",
+                "Repeating Lunch": "",
+                "Repeating Snacks": "",
+                "Repeating Dinner": "",
+            },
+            {
+                Breakfast: "Aloo Stuffed Paratha + Curd, Andhra Bonda + Idli + Chettinad Kaara Chutney, Egg Omelette",
+                Lunch: "Phulka, Paneer Tikka Masala, Bisi Bele Bath + Potato Chips, Vatha Kuzhambu, Keerai Poriyal, Sweet Lassi",
+                Snacks: "Dahi Vada",
+                Dinner: "Chapathi, Veg Kadai Gravy, Lemon Seva + Arhar Dal Tadka, Bhindi Masala Dry, Cold Badam Milk",
+                "Repeating Breakfast": "",
+                "Repeating Lunch": "",
+                "Repeating Snacks": "",
+                "Repeating Dinner": "",
+            },
+            {
+                Breakfast: "Poori + White Peas Masala, Millet Mixed Idli + Vada + Sambar + Tomato Pudina Chutney, Masala Fried Egg",
+                Lunch: "Phulka, Malai Kofta Gravy, Andhra Pappu, Udupi Sambar, Potato Pattani Masiyal, Fruit Salad",
+                Snacks: "Papdi Chaat",
+                Dinner: "Masala Aloo Kulcha, White Chana Masala, Idli + Chutney + Sambar, Gobi 65, Jalebi",
+                "Repeating Breakfast": "",
+                "Repeating Lunch": "",
+                "Repeating Snacks": "",
+                "Repeating Dinner": "",
+            },
+            {
+                Breakfast: "Onion Dosa + Sambar + Mint Coriander Chutney, Onion Potato Poha, Omelette",
+                Lunch: "Phulka, Dal Tadka, Schezwan Fried Rice + Vegetable Manchurian, Kongunadu Sambar, Keerai Kootu, Sweet Lassi",
+                Snacks: "Veg Puff + Sauce, Tea Cake",
+                Dinner: "Phulka, Chowly Masala, Jeera Rice + Dal Fry, Kadhi Pakoda Curry, Vanilla Ice Cream",
+                "Repeating Breakfast": "",
+                "Repeating Lunch": "",
+                "Repeating Snacks": "",
+                "Repeating Dinner": "",
+            },
+            {
+                Breakfast: "Pav Bhaji + Chopped Onion, Millet Pongal + Vada + Sambar + Coconut Chutney, Masala Egg Curry",
+                Lunch: "Chapathi, Kadai Paneer, Hyderabadi Dum Biryani + Onion Raita, Brinjal Curry, Semiya Payasam",
+                Snacks: "Pani Puri",
+                Dinner: "Phulka, Dal Makhani, Masala Dosa + Coconut Chutney + Sambar, Lauki Chana Curry, Gulab Jamun",
+                "Repeating Breakfast": "",
+                "Repeating Lunch": "",
+                "Repeating Snacks": "",
+                "Repeating Dinner": "",
+            },
+        ];
+
+        const csvContent = Papa.unparse(sampleRows);
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'feastfull_october_menu_template.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast.success('Downloaded menu template with repeating columns');
     };
 
     const handleCsvSubmit = async () => {
@@ -1614,48 +1875,73 @@ const AdminMenuEditor = ({ session, onClose }) => {
             complete: async (results) => {
                 const data = results.data;
                 const rawItems = [];
+                const rawRepeatingItems = {
+                    breakfast: [],
+                    lunch: [],
+                    snacks: [],
+                    dinner: [],
+                };
                 
                 data.forEach(row => {
-                    ['Breakfast', 'Lunch', 'Snacks', 'Dinner'].forEach(mt => {
-                        const cellVal = row[mt] || row[mt.toLowerCase()];
-                        const parsedItems = splitCellItems(cellVal);
-                        parsedItems.forEach(itemName => {
-                            rawItems.push({
-                                meal_type: mt.toLowerCase(),
-                                name: itemName,
-                                description: 'Bulk Upload'
+                    ['breakfast', 'lunch', 'snacks', 'dinner'].forEach(mt => {
+                        // Regular columns
+                        const regVal = getRegularValue(row, mt);
+                        if (regVal) {
+                            const parsedItems = splitCellItems(regVal);
+                            parsedItems.forEach(itemName => {
+                                rawItems.push({
+                                    meal_type: mt,
+                                    name: itemName,
+                                    description: 'Bulk Upload',
+                                    is_repeating: false,
+                                });
                             });
-                        });
+                        }
+
+                        // Repeating columns (present in all days)
+                        const repVal = getRepeatingValue(row, mt);
+                        if (repVal) {
+                            const parsedRep = splitCellItems(repVal);
+                            parsedRep.forEach(repName => {
+                                if (!rawRepeatingItems[mt].includes(repName)) {
+                                    rawRepeatingItems[mt].push(repName);
+                                }
+                            });
+                        }
                     });
                 });
                 
-                if (rawItems.length === 0) {
+                const totalRepeatingFound = Object.values(rawRepeatingItems).reduce((s, a) => s + a.length, 0);
+                if (rawItems.length === 0 && totalRepeatingFound === 0) {
                     toast.error('No items found in CSV. Check headers.');
                     setCsvParsing(false);
                     return;
                 }
                 
                 try {
-                    toast.loading(distributionMode === 'equal' ? 'Distributing items equally...' : 'Scheduling by minimum meal counts...', { id: 'aiToast' });
+                    toast.loading(distributionMode === 'equal' ? 'Distributing items equally across days...' : 'Scheduling by meal counts with Pan-Indian balance...', { id: 'aiToast' });
                     let distributed = [];
 
                     try {
                         const res = await axios.post(`${API_URL}/api/ai/distribute-csv`, {
                             items: rawItems,
+                            repeatingItems: rawRepeatingItems,
                             days: totalSlots,
                             distributionMode,
                             mealCounts,
+                            messType,
+                            startDate: session.start_date,
                         });
                         distributed = res.data.distributed || [];
                     } catch (apiError) {
                         console.error('distribute-csv API unavailable, falling back to local scheduling:', apiError);
-                        distributed = distributeLocally(rawItems, totalSlots, distributionMode, mealCounts);
-                        toast('API unavailable. Scheduled locally instead.', { id: 'aiToast', icon: '⚠️' });
+                        distributed = distributeLocally(rawItems, totalSlots, distributionMode, mealCounts, rawRepeatingItems, session.start_date);
+                        toast('API unavailable. Scheduled locally with regional & balance rules.', { id: 'aiToast', icon: '⚠️' });
                     }
                     
                     // Map day_index back into proper dates
                     const dbItems = distributed.map(it => {
-                        const d = new Date(slotOptions[0]?.value || '2000-01-03');
+                        const d = new Date(slotOptions[0]?.value || session.start_date || '2000-01-03');
                         d.setDate(d.getDate() + (it.day_index || 0));
                         return {
                             session_id: session.id,
@@ -1663,8 +1949,8 @@ const AdminMenuEditor = ({ session, onClose }) => {
                             meal_type: it.meal_type,
                             mess_type: messType,
                             name: it.name,
-                            description: it.description,
-                            approval_status: 'approved'
+                            description: it.description || (it.is_repeating ? 'Daily Repeating Item' : 'Bulk Upload'),
+                            approval_status: 'approved',
                         };
                     });
 
@@ -1677,10 +1963,10 @@ const AdminMenuEditor = ({ session, onClose }) => {
                     }
 
                     fetchItems();
-                    toast.success(`Successfully uploaded and scheduled ${dbItems.length} items`, { id: 'aiToast' });
+                    toast.success(`Successfully uploaded and scheduled ${dbItems.length} items (${totalRepeatingFound} daily repeating types included)`, { id: 'aiToast' });
                 } catch (err) {
                     console.error(err);
-                    toast.error('Failed to distribute items via AI', { id: 'aiToast' });
+                    toast.error('Failed to distribute items: ' + (err.message || 'Server error'), { id: 'aiToast' });
                 } finally {
                     setCsvParsing(false);
                 }
@@ -1815,7 +2101,12 @@ const AdminMenuEditor = ({ session, onClose }) => {
                                     </button>
                                 )}
                             </div>
-                            <p className="text-xs leading-5 text-indigo-700/90 block mb-4">Upload a CSV (Breakfast, Lunch, Snacks, Dinner headers). Minimum mode uses the session meal limits plus a bulk buffer.</p>
+                            <p className="text-xs leading-5 text-indigo-700/90 block mb-3">Upload a CSV with 4 meal columns (Breakfast, Lunch, Snacks, Dinner) and 4 repeating columns (Repeating Breakfast, Repeating Lunch, Repeating Snacks, Repeating Dinner). Repeating items appear on every day.</p>
+                            <div className="mb-4">
+                                <button type="button" onClick={handleDownloadTemplate} className="text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-100/70 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-colors flex items-center gap-1.5 shadow-xs">
+                                    <Download size={13} /> Download 8-Column CSV Template
+                                </button>
+                            </div>
                             
                             <div className="space-y-3.5">
                                 <div>
@@ -1845,7 +2136,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
                                 {distributionMode === 'min-config' && (
                                     <div className="grid grid-cols-2 gap-2.5">
                                         <div>
-                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Breakfast (limit + 3)</label>
+                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Breakfast (limit + {BULK_ALLOCATION_BUFFER.breakfast})</label>
                                             <input
                                                 type="number"
                                                 min="1"
@@ -1855,7 +2146,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Lunch (limit + 4)</label>
+                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Lunch (limit + {BULK_ALLOCATION_BUFFER.lunch})</label>
                                             <input
                                                 type="number"
                                                 min="1"
@@ -1865,7 +2156,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Snacks (limit + 3)</label>
+                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Snacks (limit + {BULK_ALLOCATION_BUFFER.snacks})</label>
                                             <input
                                                 type="number"
                                                 min="1"
@@ -1875,7 +2166,7 @@ const AdminMenuEditor = ({ session, onClose }) => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Dinner (limit + 4)</label>
+                                            <label className="block text-[10px] font-bold tracking-wide text-indigo-800 uppercase mb-1">Dinner (limit + {BULK_ALLOCATION_BUFFER.dinner})</label>
                                             <input
                                                 type="number"
                                                 min="1"

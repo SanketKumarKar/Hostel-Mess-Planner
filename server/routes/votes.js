@@ -41,7 +41,7 @@ module.exports = (supabase) => {
             if (itemError) throw itemError;
 
             const mealType = itemData.meal_type;
-            const defaultLimits = { breakfast: 3, lunch: 6, snacks: 2, dinner: 6 };
+            const defaultLimits = { breakfast: 4, lunch: 8, snacks: 2, dinner: 8 };
             const limitKey = `${mealType}_limit`;
             const mealLimit = itemData.session?.[limitKey] || defaultLimits[mealType] || 4;
             

@@ -21,8 +21,9 @@ Secure login through Supabase Auth (Email/Password + Google OAuth), dividing res
 - **Configurable Cycle Length**: Each session can now be created as **1-week (Mon-Sun)** or **2-week (Mon Wk1-Sun Wk2)**. This controls manual slot selection, CSV scheduling windows, and PDF labels.
 - **Slot-Based Labeling (Date-Independent)**: Day labels (e.g., Mon, Wk1 / Tue, Wk2) are now tied to menu slots, not session start/end dates, so planning labels remain stable and consistent.
 - **AI-Powered Menu Suggestion**: Integration with Google Gemini AI allows caterers to input available raw materials (e.g., "potatoes, paneer, spinach") and receive 5 optimized bulk dish suggestions tailored for specific meal types and mess categories.
-- **AI Bulk CSV Upload & Scheduling**: Admins can upload CSV files with `Breakfast`, `Lunch`, `Snacks`, and `Dinner` columns, auto-split comma-separated dish lists, and schedule them across **7 or 14 days** based on the selected session cycle.
-- **Dual Distribution Modes**: Choose between **Equal Distribution** (round-robin by day) or **Minimum Per Day Configuration** (day-first allocation using configurable meal counts such as Breakfast 3, Lunch 6, Snacks 2, Dinner 6).
+- **AI Bulk CSV Upload & Scheduling**: Admins can upload CSV files with 4 meal columns (`Breakfast`, `Lunch`, `Snacks`, `Dinner`) and 4 repeating columns (`Repeating Breakfast`, `Repeating Lunch`, `Repeating Snacks`, `Repeating Dinner`). Repeating items automatically appear on every single day.
+- **Pan-Indian Cultural & Dietary Balance**: The AI distribution engine balances North, South, East, and West cuisines, enforces a wholesome balanced diet on weekdays (Mon-Fri), and schedules popular comfort/junk/special items on weekends (Sat-Sun) to match real university mess menus.
+- **Dual Distribution Modes**: Choose between **Equal Distribution** (round-robin by day) or **Minimum Per Day Configuration** (day-first allocation using configurable meal counts such as Breakfast 4, Lunch 8, Snacks 2, Dinner 8).
 - **Resilient Scheduling Fallback**: If the AI distribution endpoint is unavailable, the frontend automatically uses local deterministic scheduling logic so bulk uploads still complete.
 - **Admin Bulk Actions**: In Admin Menu Editor, quickly **Delete All Items**, **Remove Upload**, and use custom-styled confirmations for destructive actions.
 - **Voting Interface**: A gamified selection system to gauge item popularity before final procurement approvals. Students can vote for up to **8 items per day**, enforced on both client and server.
@@ -135,16 +136,20 @@ Distributes uploaded CSV menu items over a configurable session window (7 or 14 
   ```json
   {
     "items": [
-      { "name": "Idli", "meal_type": "breakfast", "description": "Bulk Upload" },
-      { "name": "Rice", "meal_type": "lunch", "description": "Bulk Upload" }
+      { "name": "Aloo Paratha + Curd", "meal_type": "breakfast", "description": "Bulk Upload" },
+      { "name": "Paneer Butter Masala", "meal_type": "lunch", "description": "Bulk Upload" }
     ],
-    "days": 7,
+    "repeatingItems": {
+      "breakfast": ["Toasted Bread + Butter + Jam", "Tea / Coffee / Milk"],
+      "lunch": ["White Rice", "Paruppu Rasam", "Curd", "Pickle + Papad"]
+    },
+    "days": 14,
     "distributionMode": "min-config",
     "mealCounts": {
-      "breakfast": 3,
-      "lunch": 6,
+      "breakfast": 4,
+      "lunch": 8,
       "snacks": 2,
-      "dinner": 6
+      "dinner": 8
     }
   }
   ```

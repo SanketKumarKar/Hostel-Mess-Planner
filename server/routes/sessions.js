@@ -43,10 +43,10 @@ module.exports = (supabase) => {
             }
 
             const normalizedWeeks = Number(session_weeks) === 1 ? 1 : 2;
-            const bLimit = Number(breakfast_limit) > 0 ? Number(breakfast_limit) : 3;
-            const lLimit = Number(lunch_limit) > 0 ? Number(lunch_limit) : 6;
+            const bLimit = Number(breakfast_limit) > 0 ? Number(breakfast_limit) : 4;
+            const lLimit = Number(lunch_limit) > 0 ? Number(lunch_limit) : 8;
             const sLimit = Number(snacks_limit) > 0 ? Number(snacks_limit) : 2;
-            const dLimit = Number(dinner_limit) > 0 ? Number(dinner_limit) : 6;
+            const dLimit = Number(dinner_limit) > 0 ? Number(dinner_limit) : 8;
 
             const { data, error } = await supabase
                 .from('voting_sessions')
