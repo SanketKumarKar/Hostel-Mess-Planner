@@ -168,9 +168,7 @@ const Login = () => {
     const handleGoogleLogin = async () => {
         setLoading(true);
         try {
-            const redirectTo = window.location.hostname === 'localhost'
-                ? `${window.location.origin}/`
-                : 'https://hostel-mess-planner.vercel.app/';
+            const redirectTo = `${window.location.origin}/`;
 
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
@@ -232,9 +230,7 @@ const Login = () => {
         setLoading(true);
         try {
             if (isRegister) {
-                const emailRedirectTo = window.location.hostname === 'localhost'
-                    ? `${window.location.origin}/login`
-                    : 'https://hostel-mess-planner.vercel.app/login';
+                const emailRedirectTo = `${window.location.origin}/login`;
 
                 // Step 1: Create auth account (email confirmation required)
                 const { data, error } = await supabase.auth.signUp({
@@ -386,6 +382,7 @@ const Login = () => {
                                             onChange={(val) => setRole(val)}
                                             options={[
                                                 { value: 'student', label: 'Student' },
+                                                { value: 'parent', label: 'Parent' },
                                                 ...(settings.caterer ? [{ value: 'caterer', label: 'Caterer' }] : []),
                                                 ...(settings.admin ? [{ value: 'admin', label: 'Admin' }] : [])
                                             ]}

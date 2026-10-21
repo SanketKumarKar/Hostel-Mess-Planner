@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { Plus, Check, X, Clock, PlayCircle, StopCircle, TrendingUp, Trash, Trash2, Settings, MessageSquare, Users, UserCog, UserX, Sparkles, Loader2, XCircle, CheckCircle, Download, FileSpreadsheet, Eye, Filter, Search, MessageCircle, Send } from 'lucide-react';
+import { Plus, Check, X, Clock, PlayCircle, StopCircle, TrendingUp, Trash, Trash2, Settings, MessageSquare, Users, UserCog, UserX, Sparkles, Loader2, XCircle, CheckCircle, Download, FileSpreadsheet, Eye, Filter, Search, MessageCircle, Send, Truck, Package, MapPin, AlertCircle, FileText, CheckCheck, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import CustomSelect from '../components/CustomSelect';
@@ -38,7 +38,7 @@ const AdminDashboard = () => {
     const [showSettings, setShowSettings] = useState(false);
     const [finalizingSession, setFinalizingSession] = useState(null);
     const [editingSession, setEditingSession] = useState(null);
-    const [stats, setStats] = useState({ pendingFeedbacks: 0, totalVotes: 0, activeSessions: 0, pendingApprovals: 0 });
+    const [stats, setStats] = useState({ pendingFeedbacks: 0, totalVotes: 0, activeSessions: 0, pendingApprovals: 0, pendingSpecialRequests: 0 });
     const [activeTab, setActiveTab] = useState('sessions');
     const [summaryLoading, setSummaryLoading] = useState(false);
     const [summaryText, setSummaryText] = useState('');
@@ -75,7 +75,14 @@ const AdminDashboard = () => {
             const { count: voteCount } = await supabase.from('votes').select('*', { count: 'exact', head: true });
             const { count: sessionCount } = await supabase.from('voting_sessions').select('*', { count: 'exact', head: true }).eq('status', 'open_for_voting');
             const { count: pendingCount } = await supabase.from('menu_items').select('*', { count: 'exact', head: true }).eq('approval_status', 'pending');
-            setStats({ pendingFeedbacks: feedbackCount || 0, totalVotes: voteCount || 0, activeSessions: sessionCount || 0, pendingApprovals: pendingCount || 0 });
+            const { count: specialReqCount } = await supabase.from('room_delivery_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+            setStats({ 
+                pendingFeedbacks: feedbackCount || 0, 
+                totalVotes: voteCount || 0, 
+                activeSessions: sessionCount || 0, 
+                pendingApprovals: pendingCount || 0,
+                pendingSpecialRequests: specialReqCount || 0
+            });
         } catch (error) { console.error('Error fetching stats:', error); }
     };
 
@@ -192,18 +199,22 @@ const AdminDashboard = () => {
                 </div>
             </div>
 
-            <div className="flex gap-4 border-b border-gray-200">
-                <button onClick={() => setActiveTab('sessions')} className={`pb-3 font-medium px-2 transition-all ${activeTab === 'sessions' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>Voting Sessions</button>
-                <button onClick={() => setActiveTab('approvals')} className={`pb-3 font-medium px-2 transition-all flex items-center gap-2 ${activeTab === 'approvals' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>Pending Approvals{stats.pendingApprovals > 0 && (<span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">{stats.pendingApprovals}</span>)}</button>
-                <button onClick={() => setActiveTab('feedback')} className={`pb-3 font-medium px-2 transition-all flex items-center gap-2 ${activeTab === 'feedback' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>
+            <div className="flex gap-4 border-b border-gray-200 overflow-x-auto">
+                <button onClick={() => setActiveTab('sessions')} className={`pb-3 font-medium px-2 whitespace-nowrap transition-all ${activeTab === 'sessions' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>Voting Sessions</button>
+                <button onClick={() => setActiveTab('approvals')} className={`pb-3 font-medium px-2 whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === 'approvals' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>Pending Approvals{stats.pendingApprovals > 0 && (<span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">{stats.pendingApprovals}</span>)}</button>
+                <button onClick={() => setActiveTab('special_requests')} className={`pb-3 font-medium px-2 whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === 'special_requests' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <Truck size={16} /> Special Requests
+                    {stats.pendingSpecialRequests > 0 && (<span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">{stats.pendingSpecialRequests}</span>)}
+                </button>
+                <button onClick={() => setActiveTab('feedback')} className={`pb-3 font-medium px-2 whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === 'feedback' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>
                     <MessageSquare size={16} /> Live Feedback
                     {stats.pendingFeedbacks > 0 && (<span className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">{stats.pendingFeedbacks}</span>)}
                 </button>
-                <button onClick={() => setActiveTab('caterers')} className={`pb-3 font-medium px-2 transition-all ${activeTab === 'caterers' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>Manage Caterers</button>
+                <button onClick={() => setActiveTab('caterers')} className={`pb-3 font-medium px-2 whitespace-nowrap transition-all ${activeTab === 'caterers' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}>Manage Caterers</button>
             </div>
 
             {activeTab === 'sessions' && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 animate-fade-in">
                     <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3"><div className="p-2 bg-indigo-50 text-indigo-600 rounded-full"><PlayCircle size={20} /></div><div><p className="text-xs text-gray-500 font-medium">Active Sessions</p><h3 className="text-xl font-bold text-gray-800">{stats.activeSessions}</h3></div></div>
                     <button onClick={handleOpenPendingFeedbackModal} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3 text-left hover:shadow-md hover:border-orange-200 transition-all">
                         <div className="p-2 bg-orange-50 text-orange-600 rounded-full"><MessageSquare size={20} /></div>
@@ -213,7 +224,14 @@ const AdminDashboard = () => {
                         </div>
                     </button>
                     <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3"><div className="p-2 bg-green-50 text-green-600 rounded-full"><Users size={20} /></div><div><p className="text-xs text-gray-500 font-medium">Total Votes</p><h3 className="text-xl font-bold text-gray-800">{formatCompactVotes(stats.totalVotes)}</h3></div></div>
-                    <div className="bg-white p-5 rounded-xl shadow-sm border border-red-100 border flex items-center gap-3"><div className="p-2 bg-red-50 text-red-600 rounded-full"><Check size={20} /></div><div><p className="text-xs text-gray-500 font-medium">Pending Approvals</p><h3 className="text-xl font-bold text-gray-800">{stats.pendingApprovals}</h3></div></div>
+                    <div className="bg-white p-5 rounded-xl shadow-sm border border-red-100 flex items-center gap-3"><div className="p-2 bg-red-50 text-red-600 rounded-full"><Check size={20} /></div><div><p className="text-xs text-gray-500 font-medium">Pending Approvals</p><h3 className="text-xl font-bold text-gray-800">{stats.pendingApprovals}</h3></div></div>
+                    <button onClick={() => setActiveTab('special_requests')} className="bg-white p-5 rounded-xl shadow-sm border border-amber-100 flex items-center gap-3 text-left hover:shadow-md hover:border-amber-200 transition-all">
+                        <div className="p-2 bg-amber-50 text-amber-600 rounded-full"><Truck size={20} /></div>
+                        <div>
+                            <p className="text-xs text-gray-500 font-medium">Special Requests</p>
+                            <h3 className="text-xl font-bold text-gray-800">{stats.pendingSpecialRequests}</h3>
+                        </div>
+                    </button>
                 </div>
             )}
 
@@ -349,6 +367,8 @@ const AdminDashboard = () => {
                 </>
             ) : activeTab === 'approvals' ? (
                 <PendingApprovals onApproved={fetchStats} />
+            ) : activeTab === 'special_requests' ? (
+                <SpecialRequestsManager onUpdated={fetchStats} />
             ) : activeTab === 'feedback' ? (
                 <AdminLiveFeedbackPanel />
             ) : (
@@ -458,6 +478,487 @@ const PendingApprovals = ({ onApproved }) => {
                     </div>
                 ))}
             </div>
+        </div>
+    );
+};
+
+const SpecialRequestsManager = ({ onUpdated }) => {
+    const [requests, setRequests] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [blockFilter, setBlockFilter] = useState('all');
+    const [mealFilter, setMealFilter] = useState('all');
+    const [acting, setActing] = useState(null);
+    const [previewImage, setPreviewImage] = useState(null);
+    const [noteModal, setNoteModal] = useState(null);
+    const [noteInput, setNoteInput] = useState('');
+
+    const fetchRequests = useCallback(async () => {
+        setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('room_delivery_requests')
+                .select(`
+                    *,
+                    student:profiles!student_id(full_name, reg_number, mess_type, assigned_caterer_id, hostel_block, room_number)
+                `)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setRequests(data || []);
+        } catch (err) {
+            console.error('Error fetching special requests:', err);
+            toast.error('Failed to load special requests');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchRequests();
+    }, [fetchRequests]);
+
+    const handleUpdateStatus = async (id, status, notes) => {
+        setActing(id + '-' + status);
+        try {
+            const updates = {
+                status,
+                updated_at: new Date().toISOString()
+            };
+            if (notes !== undefined) {
+                updates.admin_notes = notes;
+            }
+
+            const { error } = await supabase
+                .from('room_delivery_requests')
+                .update(updates)
+                .eq('id', id);
+
+            if (error) throw error;
+            toast.success(`Request marked as ${status.replace(/_/g, ' ')}`);
+            await fetchRequests();
+            if (onUpdated) onUpdated();
+        } catch (err) {
+            console.error('Error updating status:', err);
+            toast.error(err.message || 'Failed to update request');
+        } finally {
+            setActing(null);
+            setNoteModal(null);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm('Delete this request permanently?')) return;
+        setActing(id + '-delete');
+        try {
+            const { error } = await supabase
+                .from('room_delivery_requests')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            toast.success('Request deleted');
+            await fetchRequests();
+            if (onUpdated) onUpdated();
+        } catch (err) {
+            console.error('Error deleting request:', err);
+            toast.error(err.message || 'Failed to delete');
+        } finally {
+            setActing(null);
+        }
+    };
+
+    const statusBadge = {
+        pending: { label: 'Pending Review', color: 'text-amber-800 bg-amber-50 border-amber-200', icon: Clock },
+        approved: { label: 'Approved', color: 'text-blue-800 bg-blue-50 border-blue-200', icon: CheckCircle },
+        rejected: { label: 'Rejected', color: 'text-red-800 bg-red-50 border-red-200', icon: XCircle },
+        packed: { label: 'Packed', color: 'text-purple-800 bg-purple-50 border-purple-200', icon: Package },
+        out_for_delivery: { label: 'Out for Delivery', color: 'text-orange-800 bg-orange-50 border-orange-200', icon: Truck },
+        delivered: { label: 'Delivered', color: 'text-emerald-800 bg-emerald-50 border-emerald-200', icon: CheckCheck }
+    };
+
+    const filtered = requests.filter(r => {
+        if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+        if (blockFilter !== 'all' && r.hostel_block !== blockFilter) return false;
+        if (mealFilter !== 'all' && r.meal_type !== mealFilter) return false;
+        if (search.trim()) {
+            const q = search.toLowerCase();
+            const studentName = (r.student?.full_name || '').toLowerCase();
+            const regNumber = (r.student?.reg_number || '').toLowerCase();
+            const roomNumber = (r.room_number || '').toLowerCase();
+            const reason = (r.reason || '').toLowerCase();
+            const notes = (r.admin_notes || '').toLowerCase();
+            return studentName.includes(q) || regNumber.includes(q) || roomNumber.includes(q) || reason.includes(q) || notes.includes(q);
+        }
+        return true;
+    });
+
+    const counts = {
+        total: requests.length,
+        pending: requests.filter(r => r.status === 'pending').length,
+        approved: requests.filter(r => r.status === 'approved').length,
+        inTransit: requests.filter(r => r.status === 'packed' || r.status === 'out_for_delivery').length,
+        delivered: requests.filter(r => r.status === 'delivered').length,
+        rejected: requests.filter(r => r.status === 'rejected').length
+    };
+
+    return (
+        <div className="space-y-5 animate-fade-in">
+            {/* Header / Summary row */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-gray-100">
+                <div>
+                    <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                        <Truck className="text-primary" size={22} /> Special Room Delivery Requests
+                    </h3>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                        Review, approve, or reject medical & illness meal delivery requests from students.
+                    </p>
+                </div>
+                <button
+                    onClick={fetchRequests}
+                    disabled={loading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold border border-gray-200 transition-colors"
+                >
+                    <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+                </button>
+            </div>
+
+            {/* Quick Status Stats Pills */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {[
+                    { key: 'all', label: 'All Requests', count: counts.total, color: 'border-gray-200 bg-white text-gray-700' },
+                    { key: 'pending', label: 'Pending Review', count: counts.pending, color: 'border-amber-200 bg-amber-50/70 text-amber-800' },
+                    { key: 'approved', label: 'Approved', count: counts.approved, color: 'border-blue-200 bg-blue-50/70 text-blue-800' },
+                    { key: 'inTransit', label: 'In Delivery', count: counts.inTransit, color: 'border-purple-200 bg-purple-50/70 text-purple-800' },
+                    { key: 'delivered', label: 'Delivered', count: counts.delivered, color: 'border-emerald-200 bg-emerald-50/70 text-emerald-800' },
+                    { key: 'rejected', label: 'Rejected', count: counts.rejected, color: 'border-red-200 bg-red-50/70 text-red-800' }
+                ].map((stat) => (
+                    <button
+                        key={stat.key}
+                        onClick={() => setStatusFilter(stat.key === 'inTransit' ? 'packed' : stat.key)}
+                        className={`p-3 rounded-xl border text-left transition-all ${stat.color} ${
+                            (statusFilter === stat.key || (stat.key === 'inTransit' && (statusFilter === 'packed' || statusFilter === 'out_for_delivery')))
+                                ? 'ring-2 ring-primary shadow-sm font-bold'
+                                : 'hover:shadow-xs'
+                        }`}
+                    >
+                        <p className="text-[11px] font-medium opacity-80">{stat.label}</p>
+                        <p className="text-xl font-extrabold mt-0.5">{stat.count}</p>
+                    </button>
+                ))}
+            </div>
+
+            {/* Filters & Search Toolbar */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-wrap gap-3 items-center justify-between">
+                <div className="relative flex-1 min-w-[220px]">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Search student, reg #, room, reason..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    />
+                </div>
+
+                <div className="flex flex-wrap gap-2 items-center text-xs">
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium focus:outline-none focus:border-primary"
+                    >
+                        <option value="all">All Statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="packed">Packed</option>
+                        <option value="out_for_delivery">Out for Delivery</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+
+                    <select
+                        value={blockFilter}
+                        onChange={(e) => setBlockFilter(e.target.value)}
+                        className="px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium focus:outline-none focus:border-primary"
+                    >
+                        <option value="all">All Blocks</option>
+                        {['A', 'B', 'C', 'D', 'E'].map(b => (
+                            <option key={b} value={b}>Block {b}</option>
+                        ))}
+                    </select>
+
+                    <select
+                        value={mealFilter}
+                        onChange={(e) => setMealFilter(e.target.value)}
+                        className="px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium focus:outline-none focus:border-primary"
+                    >
+                        <option value="all">All Meals</option>
+                        <option value="breakfast">Breakfast</option>
+                        <option value="lunch">Lunch</option>
+                        <option value="snacks">Snacks</option>
+                        <option value="dinner">Dinner</option>
+                    </select>
+
+                    {(search || statusFilter !== 'all' || blockFilter !== 'all' || mealFilter !== 'all') && (
+                        <button
+                            onClick={() => { setSearch(''); setStatusFilter('all'); setBlockFilter('all'); setMealFilter('all'); }}
+                            className="px-2.5 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium"
+                        >
+                            Reset
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Requests List */}
+            {loading ? (
+                <div className="text-center py-12 text-gray-500">
+                    <Loader2 size={32} className="animate-spin mx-auto text-primary mb-2" />
+                    <p className="text-sm">Loading special requests...</p>
+                </div>
+            ) : filtered.length === 0 ? (
+                <div className="text-center py-16 bg-white rounded-xl border border-gray-100">
+                    <Truck size={40} className="mx-auto text-gray-300 mb-2" />
+                    <h4 className="text-base font-bold text-gray-800">No Special Requests Found</h4>
+                    <p className="text-xs sm:text-sm text-gray-500 max-w-sm mx-auto mt-1">
+                        {requests.length === 0 
+                            ? 'No students have submitted meal delivery requests yet.'
+                            : 'No requests match your current filters.'}
+                    </p>
+                </div>
+            ) : (
+                <div className="grid gap-4">
+                    {filtered.map((req) => {
+                        const badge = statusBadge[req.status] || statusBadge.pending;
+                        const StatusIcon = badge.icon;
+                        const studentName = req.student?.full_name || 'Student';
+                        const regNo = req.student?.reg_number || 'N/A';
+
+                        return (
+                            <div key={req.id} className="bg-white rounded-xl shadow-sm border border-gray-200/80 p-4 sm:p-5 transition-shadow hover:shadow-md">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm border border-indigo-100 shrink-0">
+                                            {studentName.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <h4 className="font-bold text-gray-900 text-sm sm:text-base">{studentName}</h4>
+                                                <span className="text-xs text-gray-400">({regNo})</span>
+                                                {req.student?.mess_type && (
+                                                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 capitalize font-medium">
+                                                        {req.student.mess_type.replace(/_/g, ' ')}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
+                                                <MapPin size={12} className="text-gray-400" />
+                                                Hostel Block <strong>{req.hostel_block}</strong> • Room <strong>{req.room_number}</strong>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${badge.color}`}>
+                                            <StatusIcon size={13} /> {badge.label}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Body details */}
+                                <div className="grid sm:grid-cols-3 gap-4 py-3.5 text-xs">
+                                    <div>
+                                        <p className="text-gray-400 uppercase font-semibold text-[10px]">Meal & Delivery Date</p>
+                                        <p className="font-bold text-gray-800 text-sm mt-0.5 capitalize">
+                                            {req.meal_type}
+                                        </p>
+                                        <p className="text-gray-500 mt-0.5">
+                                            {new Date(`${req.date}T00:00:00`).toLocaleDateString('en-US', {
+                                                weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+                                            })}
+                                        </p>
+                                    </div>
+
+                                    <div className="sm:col-span-2">
+                                        <p className="text-gray-400 uppercase font-semibold text-[10px]">Reason for Request</p>
+                                        <p className="text-gray-700 mt-0.5 bg-gray-50 p-2.5 rounded-lg border border-gray-100 leading-relaxed">
+                                            {req.reason}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Proof attachment & admin notes */}
+                                {(req.proof_image_url || req.admin_notes) && (
+                                    <div className="flex flex-col sm:flex-row gap-3 pt-1 pb-3 text-xs">
+                                        {req.proof_image_url && (
+                                            <button
+                                                onClick={() => setPreviewImage(req.proof_image_url)}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg font-semibold border border-blue-200/70 transition-colors w-fit"
+                                            >
+                                                <Eye size={13} /> View Attached Medical Proof
+                                            </button>
+                                        )}
+
+                                        {req.admin_notes && (
+                                            <div className="flex-1 bg-amber-50/70 border border-amber-200/70 rounded-lg p-2.5 text-amber-900">
+                                                <span className="font-bold">Admin Note: </span>{req.admin_notes}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Action Buttons */}
+                                <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-gray-100 mt-1">
+                                    <span className="text-[11px] text-gray-400">
+                                        Submitted {new Date(req.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                    </span>
+
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {req.status === 'pending' ? (
+                                            <>
+                                                <button
+                                                    onClick={() => {
+                                                        setNoteModal({ id: req.id, targetStatus: 'approved', studentName });
+                                                        setNoteInput(req.admin_notes || 'Approved for room delivery');
+                                                    }}
+                                                    disabled={acting === req.id + '-approved'}
+                                                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
+                                                >
+                                                    {acting === req.id + '-approved' ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                                                    Approve Request
+                                                </button>
+
+                                                <button
+                                                    onClick={() => {
+                                                        setNoteModal({ id: req.id, targetStatus: 'rejected', studentName });
+                                                        setNoteInput(req.admin_notes || '');
+                                                    }}
+                                                    disabled={acting === req.id + '-rejected'}
+                                                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-bold transition-colors"
+                                                >
+                                                    {acting === req.id + '-rejected' ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
+                                                    Reject
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    onClick={() => {
+                                                        setNoteModal({ id: req.id, targetStatus: req.status, studentName, isEditingNoteOnly: true });
+                                                        setNoteInput(req.admin_notes || '');
+                                                    }}
+                                                    className="px-2.5 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs font-medium border border-gray-200"
+                                                >
+                                                    Edit Note
+                                                </button>
+
+                                                <select
+                                                    value={req.status}
+                                                    onChange={(e) => handleUpdateStatus(req.id, e.target.value)}
+                                                    className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 bg-gray-50 font-medium text-gray-700 focus:outline-none"
+                                                >
+                                                    <option value="pending">Set Pending</option>
+                                                    <option value="approved">Set Approved</option>
+                                                    <option value="packed">Set Packed</option>
+                                                    <option value="out_for_delivery">Set In Delivery</option>
+                                                    <option value="delivered">Set Delivered</option>
+                                                    <option value="rejected">Set Rejected</option>
+                                                </select>
+                                            </>
+                                        )}
+
+                                        <button
+                                            onClick={() => handleDelete(req.id)}
+                                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                            title="Delete Request"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Note & Confirmation Modal */}
+            {noteModal && (
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 border border-gray-100">
+                        <h4 className="text-lg font-bold text-gray-900 mb-1">
+                            {noteModal.isEditingNoteOnly
+                                ? 'Update Admin Note'
+                                : noteModal.targetStatus === 'approved'
+                                ? `Approve Request for ${noteModal.studentName}`
+                                : `Reject Request for ${noteModal.studentName}`}
+                        </h4>
+                        <p className="text-xs text-gray-500 mb-4">
+                            {noteModal.isEditingNoteOnly
+                                ? 'This note will be visible to the student and delivery staff.'
+                                : `Add an optional note explaining the ${noteModal.targetStatus} decision.`}
+                        </p>
+
+                        <textarea
+                            rows={3}
+                            placeholder={noteModal.targetStatus === 'rejected' ? 'Enter reason for rejection (e.g. proof invalid)...' : 'Add admin note...'}
+                            value={noteInput}
+                            onChange={(e) => setNoteInput(e.target.value)}
+                            className="w-full text-xs sm:text-sm p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary mb-4"
+                        />
+
+                        <div className="flex justify-end gap-2">
+                            <button
+                                onClick={() => setNoteModal(null)}
+                                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => handleUpdateStatus(noteModal.id, noteModal.targetStatus, noteInput.trim())}
+                                disabled={!!acting}
+                                className={`px-4 py-2 text-xs font-bold text-white rounded-xl shadow-xs transition-colors ${
+                                    noteModal.targetStatus === 'rejected'
+                                        ? 'bg-red-600 hover:bg-red-700'
+                                        : 'bg-green-600 hover:bg-green-700'
+                                }`}
+                            >
+                                {noteModal.isEditingNoteOnly ? 'Save Note' : `Confirm ${noteModal.targetStatus}`}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Image Preview Modal */}
+            {previewImage && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setPreviewImage(null)}>
+                    <div className="bg-white rounded-2xl max-w-2xl w-full p-4 overflow-hidden shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-3">
+                            <h4 className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                                <FileText size={16} /> Attached Proof Document / Prescription
+                            </h4>
+                            <div className="flex items-center gap-2">
+                                <a
+                                    href={previewImage}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs text-primary font-semibold hover:underline"
+                                >
+                                    Open original
+                                </a>
+                                <button onClick={() => setPreviewImage(null)} className="p-1 hover:bg-gray-100 rounded-full text-gray-500">
+                                    <X size={18} />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="max-h-[70vh] overflow-auto flex items-center justify-center bg-gray-50 rounded-xl p-2 border border-gray-100">
+                            <img src={previewImage} alt="Medical Proof" className="max-w-full h-auto object-contain rounded-lg" />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

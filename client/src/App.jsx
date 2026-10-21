@@ -11,6 +11,10 @@ const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
 const EventsPage = lazy(() => import('./pages/EventsPage.jsx'));
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage.jsx'));
 const AnnouncementsPage = lazy(() => import('./pages/AnnouncementsPage.jsx'));
+const NightMessPage = lazy(() => import('./pages/NightMessPage.jsx'));
+const NutriPlanner = lazy(() => import('./pages/NutriPlanner.jsx'));
+const RoomDelivery = lazy(() => import('./pages/RoomDelivery.jsx'));
+const ParentDashboard = lazy(() => import('./pages/ParentDashboard.jsx'));
 const Layout = lazy(() => import('./components/Layout.jsx'));
 
 const PrivateRoute = ({ children, allowedRoles }) => {
@@ -24,6 +28,7 @@ const PrivateRoute = ({ children, allowedRoles }) => {
     // Redirect based on actual role
     if (profile.role === 'admin') return <Navigate to="/admin" replace />;
     if (profile.role === 'caterer') return <Navigate to="/caterer" replace />;
+    if (profile.role === 'parent') return <Navigate to="/parent" replace />;
     return <Navigate to="/student" replace />;
   }
 
@@ -50,7 +55,14 @@ function App() {
 
               {/* Private routes wrapped in Layout */}
               <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
-                <Route index element={<Navigate to="/student" replace />} />
+                <Route index element={<Navigate to="/dashboard" replace />} />
+
+                {/* Role-aware dashboard redirect */}
+                <Route path="dashboard" element={
+                  <PrivateRoute>
+                    <DashboardRedirect />
+                  </PrivateRoute>
+                } />
 
                 <Route path="events" element={
                   <PrivateRoute allowedRoles={['student', 'admin', 'caterer']}>
@@ -76,6 +88,30 @@ function App() {
                   </PrivateRoute>
                 } />
 
+                <Route path="night-mess" element={
+                  <PrivateRoute allowedRoles={['student', 'admin']}>
+                    <NightMessPage />
+                  </PrivateRoute>
+                } />
+
+                <Route path="nutriplan" element={
+                  <PrivateRoute allowedRoles={['student']}>
+                    <NutriPlanner />
+                  </PrivateRoute>
+                } />
+
+                <Route path="room-delivery" element={
+                  <PrivateRoute allowedRoles={['student', 'caterer', 'admin']}>
+                    <RoomDelivery />
+                  </PrivateRoute>
+                } />
+
+                <Route path="parent" element={
+                  <PrivateRoute allowedRoles={['parent']}>
+                    <ParentDashboard />
+                  </PrivateRoute>
+                } />
+
                 <Route path="caterer" element={
                   <PrivateRoute allowedRoles={['caterer']}>
                     <CatererDashboard />
@@ -87,7 +123,7 @@ function App() {
                     <AdminDashboard />
                   </PrivateRoute>
                 } />
-                
+
                 {/* Catch-all route inside Layout */}
                 <Route path="*" element={
                   <div className="text-center py-20 animate-fade-in">
@@ -97,7 +133,7 @@ function App() {
                   </div>
                 } />
               </Route>
-              
+
               {/* Global fallback if navigating outside layout */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
@@ -107,5 +143,22 @@ function App() {
     </>
   );
 }
+
+// Dashboard redirect component - redirects to role-appropriate dashboard
+const DashboardRedirect = () => {
+  const { profile } = useAuth();
+
+  // This runs after profile loads
+  if (profile) {
+    switch (profile.role) {
+      case 'student': return <Navigate to="/student" replace />;
+      case 'parent': return <Navigate to="/parent" replace />;
+      case 'caterer': return <Navigate to="/caterer" replace />;
+      case 'admin': return <Navigate to="/admin" replace />;
+      default: return <Navigate to="/student" replace />;
+    }
+  }
+  return null;
+};
 
 export default App;

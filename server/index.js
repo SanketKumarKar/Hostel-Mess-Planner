@@ -33,6 +33,9 @@ const menuRoutes = require('./routes/menu');
 const voteRoutes = require('./routes/votes');
 const announcementRoutes = require('./routes/announcements');
 const aiRoutes = require('./routes/ai');
+const attendanceRoutes = require('./routes/attendance');
+const nightMessRoutes = require('./routes/night-mess');
+const roomDeliveryRoutes = require('./routes/room-delivery');
 
 // Base route
 app.get('/', (req, res) => {
@@ -44,7 +47,10 @@ app.get('/', (req, res) => {
       menu: '/api/menu',
       votes: '/api/votes',
       announcements: '/api/announcements',
-      ai: '/api/ai'
+      ai: '/api/ai',
+      attendance: '/api/attendance',
+      'night-mess': '/api/night-mess',
+      'room-delivery': '/api/room-delivery'
     }
   });
 });
@@ -56,6 +62,11 @@ app.use('/api/sessions', readLimiter, sessionRoutes(supabase));
 app.use('/api/menu', readLimiter, menuRoutes(supabase));
 app.use('/api/votes', readLimiter, voteRoutes(supabase));
 app.use('/api/announcements', readLimiter, announcementRoutes(supabase));
+app.use('/api/attendance', readLimiter, attendanceRoutes(supabase));
+app.use('/api/night-mess', readLimiter, nightMessRoutes(supabase));
+
+// WRITE endpoints for room delivery requests
+app.use('/api/room-delivery', writeLimiter, roomDeliveryRoutes(supabase));
 
 // AI endpoints — strict limit (expensive Gemini API calls)
 app.use('/api/ai', aiLimiter, aiRoutes(supabase));

@@ -30,3 +30,8 @@ graphify/
 # Agents
 .agents/
 graphify-out/
+
+# local scripts
+createAdmin.js
+create_admin_user.sql
+scratch/

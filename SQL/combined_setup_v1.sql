@@ -270,12 +270,13 @@ BEGIN
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-    COALESCE((NEW.raw_user_meta_data->>'role')::app_role, 'student'::app_role),
-    COALESCE((NEW.raw_user_meta_data->>'mess_type')::mess_type_enum, 'veg'::mess_type_enum)
-  );
+    COALESCE((NEW.raw_user_meta_data->>'role')::public.app_role, 'student'::public.app_role),
+    COALESCE((NEW.raw_user_meta_data->>'mess_type')::public.mess_type_enum, 'veg'::public.mess_type_enum)
+  )
+  ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Trigger: Auto-create Profile
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
@@ -284,7 +285,7 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Trigger Function: Check Registration Open
-CREATE OR REPLACE FUNCTION check_registration_open()
+CREATE OR REPLACE FUNCTION public.check_registration_open()
 RETURNS TRIGGER AS $$
 DECLARE
     is_caterer_allowed text;
@@ -292,7 +293,7 @@ DECLARE
 BEGIN
     -- Check for Caterer
     IF NEW.role = 'caterer' THEN
-        SELECT setting_value INTO is_caterer_allowed FROM system_settings WHERE setting_key = 'caterer_registration';
+        SELECT setting_value INTO is_caterer_allowed FROM public.system_settings WHERE setting_key = 'caterer_registration';
         IF is_caterer_allowed = 'false' THEN
             RAISE EXCEPTION 'Caterer registration is currently closed.';
         END IF;
@@ -300,7 +301,7 @@ BEGIN
 
     -- Check for Admin
     IF NEW.role = 'admin' THEN
-        SELECT setting_value INTO is_admin_allowed FROM system_settings WHERE setting_key = 'admin_registration';
+        SELECT setting_value INTO is_admin_allowed FROM public.system_settings WHERE setting_key = 'admin_registration';
         IF is_admin_allowed = 'false' THEN
             RAISE EXCEPTION 'Admin registration is currently closed.';
         END IF;
@@ -308,14 +309,14 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Trigger: Check Registration
 DROP TRIGGER IF EXISTS check_registration_trigger ON public.profiles;
 CREATE TRIGGER check_registration_trigger
 BEFORE INSERT ON public.profiles
 FOR EACH ROW
-EXECUTE FUNCTION check_registration_open();
+EXECUTE FUNCTION public.check_registration_open();
 
 -- 6. SEED DATA
 -- ==============================================================================
