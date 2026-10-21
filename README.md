@@ -99,7 +99,7 @@ Secure login through Supabase Auth (Email/Password + Google OAuth), dividing res
 
 ### 1. Prerequisites
 - Node.js (v18+ recommended)
-- A Supabase project with database migrations applied (`SQL/combined_setup_v1.sql` and `SQL/add_new_features.sql`)
+- A Supabase project with database schema applied (Run `SQL/combined_setup_v2.sql` for full fresh setup / disaster recovery, or `combined_setup_v1.sql` + `add_new_features.sql`)
 
 ### 2. Environment Configuration
 **Server (`/server/.env`):**
