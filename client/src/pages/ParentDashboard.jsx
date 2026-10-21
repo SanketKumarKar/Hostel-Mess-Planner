@@ -61,7 +61,7 @@ const ParentDashboard = () => {
         if (selectedChild) {
             fetchMenuData(selectedChild.mess_type);
         }
-    }, [selectedChild?.mess_type]);
+    }, [selectedChild]);
 
     const fetchAttendance = async (studentId, days) => {
         try {
@@ -240,7 +240,7 @@ const ParentDashboard = () => {
                         Wait for child to link account
                     </h2>
                     <p className="text-gray-600">
-                        Once your child sets your email as their parent email in their profile, you'll see their information here.
+                        Once your child sets your email as their parent email in their profile, you&apos;ll see their information here.
                     </p>
                 </div>
             </div>
@@ -258,7 +258,7 @@ const ParentDashboard = () => {
                     </div>
                     <div>
                         <h2 className="text-xl font-bold">Parent Dashboard</h2>
-                        <p className="text-sm text-white/80">Monitor your children's mess activities</p>
+                        <p className="text-sm text-white/80">Monitor your children&apos;s mess activities</p>
                     </div>
                 </div>
             </div>
